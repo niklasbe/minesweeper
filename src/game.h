@@ -22,62 +22,47 @@ struct Tile
 	DirectX::XMFLOAT2 sprite; // uv offset
 };
 
-////////////////////////////////
-//~ nb: Game Structure
-class Game
+struct Game
 {
-	//-
-	public:
-	Game(Arena &arena);
-	void Init();
-	void Destroy();
-	void SetWindow(void *window_handle, u32, u32);
-	////////////////////////////////
-	// nb: Events
-	void OnMouseDown(MouseButton, u32, u32);
-	void OnMouseUp(MouseButton, u32, u32);
-	void OnSizeChanged(u32, u32);
-	////////////////////////////////
-	void Reset();
-	void Render();
-	
-	//-
-	private:
-	// nb: Returns true if a mine is found, signaling the end of the game
-	bool          RevealTile(u32, u32);
-	bool          RevealTile(u32);
-	void          Gameover();
-	
-	void          GetNeighbors(u32 tile_x, u32 tile_y, u32 neighbor_idx_list[8], u32 *neighor_idx_list_count);
-	void          GetNeighbors(u32 idx, u32 neighbor_idx_list[8], u32 *neighor_idx_list_count);
-	Tile          &GridToTile(u32 tile_x, u32 tile_y); 
-	Tile          &GetTile(u32 idx);
-	
 	////////////////////////////////
 	// nb: Arenas
-	Arena         *m_arena_main;
-	Arena         m_arena_scratch;
-	Arena         m_arena_frame;
-	Arena         m_arena_level;
+	Arena         *arena_main;
+	Arena         arena_scratch;
+	Arena         arena_frame;
+	Arena         arena_level;
 	
 	
 	////////////////////////////////
-	R_D3D11_State *m_renderer;
-	u32           m_spritesheetID;
-	u32           *m_floodfill_queue;
-	u32           m_floodfill_queue_count = 0;
-	u32           *m_mine_indices;
+	R_D3D11_State *renderer;
+	u32           spritesheetID;
+	u32           *floodfill_queue;
+	u32           floodfill_queue_count = 0;
+	u32           *mine_indices;
 	
 	////////////////////////////////
 	// nb: Variables
-	bool          m_playable;
-	f64           m_elapsed_time;
-	u32           m_mine_count;
-	u32           m_flag_count;
-	u32           m_columns;
-	u32           m_rows;
-	Tile          *m_tiles;
-	u32           m_tiles_size;
+	bool          is_playable;
+	f64           elapsed_time;
+	u32           mine_count;
+	u32           flag_count;
+	u32           columns;
+	u32           rows;
+	Tile          *tiles;
+	u32           tiles_count;
 };
+
+
+void game_init(Game *, Arena *);
+void game_destroy(Game *);
+
+void game_set_window(Game *, void *, u32, u32);
+void game_mouse_up(Game *, u32, u32);
+void game_mouse_down(Game *, u32, u32);
+void game_size_changed(Game *, u32, u32);
+
+void game_gameover(Game *);
+
+void game_reset(Game *);
+void game_render(Game *);
 
 #endif //GAME_H

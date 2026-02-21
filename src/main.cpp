@@ -25,45 +25,10 @@ typedef uint64_t    u64;
 typedef float       f32;
 typedef double      f64; 
 
+#define internal static
+
 #define Kilobytes(x) x*1024
 #define Megabytes(x) x*1024*1024
-
-////////////////////////////////
-//- nb: Math
-typedef union
-{
-	struct
-	{
-		f32 x;
-		f32 y;
-	};
-	f32 v[2];
-} vec2;
-
-typedef union
-{
-	struct
-	{
-		f32 x;
-		f32 y;
-		f32 z;
-	};
-	f32 v[3];
-} vec3;
-typedef vec3 mat3[3];
-
-typedef union
-{
-	struct
-	{
-		float x;
-		float y;
-		float z;
-		float w;
-	};
-	float v[4];
-} vec4;
-typedef vec4 mat4[4];
 
 ////////////////////////////////
 //- nb: Arena
@@ -98,7 +63,6 @@ void arena_clear(Arena *arena)
 
 Game     *g_game;
 
-
 // NOTE(nb): message callback
 LRESULT CALLBACK WndProc(HWND hwnd,
 						 UINT message,
@@ -121,23 +85,23 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 			PostQuitMessage(0);
 		}else if(wParam == 'R')
 		{
-			g_game->Reset();
+			game_reset(g_game);
 		}
 		break;
 		
 		case WM_LBUTTONDOWN:
-		g_game->OnMouseDown(MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_down(g_game, MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		break;
 		case WM_LBUTTONUP:
-		g_game->OnMouseUp(MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_up(g_game, MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		break;
 		
 		case WM_RBUTTONDOWN:
-		g_game->OnMouseDown(MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_down(g_game, MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		
 		break;
 		case WM_RBUTTONUP:
-		g_game->OnMouseUp(MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_up(g_game, MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		break;
 		
 		case WM_SIZE:
@@ -156,7 +120,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 		}
 		else if(!in_sizemove)
 		{
-			g_game->OnSizeChanged(LOWORD(lParam), HIWORD(lParam));
+			game_on_size_changed(g_game, LOWORD(lParam), HIWORD(lParam));
 		}
 		break;
 		
@@ -168,7 +132,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 		in_sizemove = 0;
 		RECT rc;
 		GetClientRect(hwnd, &rc);
-		g_game->OnSizeChanged(rc.right - rc.left, rc.bottom - rc.top);
+		game_on_size_changed(g_game, LOWORD(lParam), HIWORD(lParam));
 		break;
 		
 		case WM_POWERBROADCAST:
@@ -222,7 +186,7 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 	
 	////////////////////////////////
 	//- nb: Game Creation
-	Game game(main_arena);
+	Game game = {0};
 	g_game = &game;
 	{
 		//- nb Window class registration
@@ -250,8 +214,8 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 								   hInstance,
 								   NULL);
 		
-		game.Init();
-		game.SetWindow(hwnd, 1280, 720);
+		game_init(&game);
+		game_set_window(&game, hwnd, 1280, 720);
 		// NOTE(nb): ShowWindow() issues a WM_SIZE event, which will create size dependant resources for us 
 		ShowWindow(hwnd, nCmdShow);
 	}
@@ -265,11 +229,11 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 			DispatchMessage(&msg);
 		}else
 		{
-			game.Render();
+			game_render(&game);
 		}
 	}
 	
-	game.Destroy();
+	game_destroy(&game);
 	VirtualFree(permanent_storage, 0, MEM_RELEASE);
 	CoUninitialize();
 	return 0;

@@ -2,51 +2,125 @@
 
 #include <time.h>
 
-Game::Game(Arena &arena) : m_arena_main(&arena) 
+
+
+internal void game_get_neighbors(Game *, u32, u32, u32 *, u32 *);
+internal void game_get_neighbors_by_idx(Game *, u32, u32 *, u32 *);
+internal Tile *game_get_tile(Game *, u32, u32);
+internal Tile *game_get_tile_by_idx(Game *, u32);
+internal bool game_reveal_tile(Game *, u32, u32);
+internal bool game_reveal_tile_by_idx(Game *, u32);
+
+
+////////////////////////////////
+//~ nb: Internal functions
+internal void 
+game_get_neighbors_by_idx(Game *game, u32 idx, u32 neighbor_idx_list[8], u32 *neighbor_idx_list_count)
+{
+	u32 tile_x = idx % game->columns;
+	u32 tile_y = idx / game->columns;
+	game_get_neighbors(game, tile_x, tile_y, neighbor_idx_list, neighbor_idx_list_count);
+}
+
+////////////////////////////////
+// nb: This table shows the corresponding 1D array neighbor mappings
+//       1D ARRAY                2D ARRAY
+// [-W -1] [-W] [-W +1]  [-1, -1] [0, -1] [1, -1]
+// [   -1] [ n] [   +1]  [-1,  0] [    n] [1,  0]
+// [+W -1] [+W] [+W +1]  [-1,  1] [0,  1] [1,  1]
+////////////////////////////////
+internal void
+game_get_neighbors(Game *game, u32 tile_x, u32 tile_y, u32 neighbor_idx_list[8], u32 *neighbor_idx_list_count)
+{
+	u32 count = 0;
+	
+	for (int dy = -1; dy <= 1; dy++) 
+	{
+		for (int dx = -1; dx <= 1; dx++) 
+		{
+			// nb: skip current tile
+			if (dx == 0 && dy == 0) 
+				continue;
+			
+			int nx = tile_x + dx;
+			int ny = tile_y + dy;
+			
+			// nb: bounds check
+			if (nx >= 0 && nx < game->columns && ny >= 0 && ny < game->rows) 
+			{
+				u32 neighbor_idx = ny * game->columns + nx;
+				neighbor_idx_list[count] = neighbor_idx;
+				count++;
+			}
+		}
+	}
+	*neighbor_idx_list_count = count;
+}
+
+internal Tile *
+game_grid_to_tile(Game *game, u32 tile_x, u32 tile_y)
+{
+	ASSERT(tile_x < game->columns && tile_y < game->rows);
+	u32 idx = tile_y * game->columns + tile_x;
+	return game_get_tile_by_idx(game, idx);
+}
+
+internal Tile *
+game_get_tile_by_idx(Game *game, u32 idx)
+{
+	ASSERT(idx < game->tiles_count);
+	return &game->tiles[idx];
+}
+
+
+////////////////////////////////
+//~ nb: Game functions
+void 
+game_init(Game *game)
 {
 	//- nb: Arenas
-	void *scratch_ptr = (void*)arena_push(m_arena_main, Megabytes(4));
-	void *frame_ptr = (void*)arena_push(m_arena_main, Megabytes(4));
-	void *level_ptr = (void*)arena_push(m_arena_main, Megabytes(4));
-	arena_create(&m_arena_scratch, Megabytes(4), (char*)scratch_ptr);
-	arena_create(&m_arena_frame, Megabytes(4), (char*)frame_ptr);
-	arena_create(&m_arena_level, Megabytes(4), (char*)level_ptr);
+	void *scratch_ptr = (void*)arena_push(game->arena_main, Megabytes(4));
+	void *frame_ptr = (void*)arena_push(game->arena_main, Megabytes(4));
+	void *level_ptr = (void*)arena_push(game->arena_main, Megabytes(4));
+	arena_create(&game->arena_scratch, Megabytes(4), (char*)scratch_ptr);
+	arena_create(&game->arena_frame, Megabytes(4), (char*)frame_ptr);
+	arena_create(&game->arena_level, Megabytes(4), (char*)level_ptr);
 	////////////////////////////////
-	Reset();
-}
-
-void Game::Init()
-{
-	m_renderer = (R_D3D11_State*)arena_push(m_arena_main, sizeof(R_D3D11_State));
-	m_renderer->Init();
+	game_reset(game);
+	
+	game->renderer = (R_D3D11_State*)arena_push(game->arena_main, sizeof(R_D3D11_State));
+	//r_init(game->renderer);
+	game->renderer->Init();
+	
 	//- nb: Resources
-	m_spritesheetID = m_renderer->LoadTexture(L"sheet.png", m_arena_scratch);
-	
-	
-	m_floodfill_queue = (u32*)arena_push(&m_arena_level, m_tiles_size);
+	game->spritesheetID = game->renderer->LoadTexture(L"sheet.png", game->arena_scratch);
+	game->floodfill_queue = (u32*)arena_push(&game->arena_level, game->tiles_count);
 }
 
-void Game::Destroy()
+void 
+game_destroy(Game *game)
 {
-	m_renderer->Destroy();
+	game->renderer->Destroy();
 }
 
-void Game::SetWindow(void *window_handle, u32 width, u32 height)
+void 
+game_set_window(Game *game, void *window_handle, u32 width, u32 height)
 {
-	m_renderer->SetWindow(window_handle, width, height);
+	game->renderer->SetWindow(window_handle, width, height);
 }
 
-void Game::OnMouseDown(MouseButton button, u32 x, u32 y)
+void 
+game_on_mouse_down(Game *game, MouseButton button, u32 x, u32 y)
 {
 	//- nb: Get tile index
 	int tile_x = x / 32;
 	int tile_y = y / 32;
-	int idx = tile_y * m_columns + tile_x;
+	int idx = tile_y * game->columns + tile_x;
 	
-	if(tile_x >= m_columns || tile_y >= m_rows)
+	if(tile_x >= game->columns || tile_y >= game->rows)
 		return;
 	
-	Tile &tile = GetTile(idx);
+	Tile *tile = game_get_tile_by_idx(game, idx);
 	
 	switch(button)
 	{
@@ -55,134 +129,135 @@ void Game::OnMouseDown(MouseButton button, u32 x, u32 y)
 		
 		case RIGHT_CLICK:
 		// nb: Don't allow a flag to be placed on a swept mine
-		if(tile.is_swept)
+		if(tile->is_swept)
 			break;
 		
 		// nb: Place flag
-		if(!tile.has_flag)
+		if(!tile->has_flag)
 		{
-			tile.has_flag = true;
-			tile.sprite = sprites[TILE_FLAG];
+			tile->has_flag = true;
+			tile->sprite = sprites[TILE_FLAG];
 		}
 		else
 		{
-			tile.has_flag = false;
-			tile.sprite = sprites[TILE_DEFAULT];
+			tile->has_flag = false;
+			tile->sprite = sprites[TILE_DEFAULT];
 		}
 		break;
 	}
 	
 }
 
-void Game::OnMouseUp(MouseButton button, u32 x, u32 y)
+void 
+game_on_mouse_up(Game *game, MouseButton button, u32 x, u32 y)
 {
-	if(!m_playable)
+	if(!game->is_playable)
 	{
-		Reset();
+		game_reset(game);
 		return;
 	}
 	
 	//- nb: Get tile index
 	int tile_x = x / 32;
 	int tile_y = y / 32;
-	int idx = tile_y * m_columns + tile_x;
+	int idx = tile_y * game->columns + tile_x;
 	
-	if(tile_x >= m_columns || tile_y >= m_rows)
+	if(tile_x >= game->columns || tile_y >= game->rows)
 		return;
 	
 	switch(button)
 	{
 		case LEFT_CLICK:
-		if(RevealTile(idx))
-		{
-			Gameover();
-			//Reset();
-		}
+		if(game_reveal_tile_by_idx(game, idx))
+			game_gameover(game);
 		break;
 		////////////////////////////////
 		case RIGHT_CLICK:
-		Tile &tile = GridToTile(tile_x, tile_y);
+		Tile *tile = game_grid_to_tile(game, tile_x, tile_y);
 		char buff[64];
-		sprintf_s(buff, 64, "neighbors: %d", tile.neighbor_count);
+		sprintf_s(buff, 64, "neighbors: %d", tile->neighbor_count);
 		OutputDebugString(buff);
 		break;
 	}
 }
 
-void Game::OnSizeChanged(u32 width, u32 height)
+void 
+game_on_size_changed(Game *game, u32 width, u32 height)
 {
-	m_renderer->WindowSizeChanged(width, height);
+	game->renderer->WindowSizeChanged(width, height);
 }
 
-void Game::Reset()
+void 
+game_reset(Game *game)
 {
-	arena_clear(&m_arena_scratch);
-	arena_clear(&m_arena_level);
-	m_floodfill_queue_count = 0;
+	arena_clear(&game->arena_scratch);
+	arena_clear(&game->arena_level);
+	game->floodfill_queue_count = 0;
 	
 	////////////////////////////////
 	//- nb: Default values
-	m_playable          = true;
-	m_columns           = 30;
-	m_rows              = 16;
-	m_mine_count        = 90;
-	m_flag_count        = 0;
-	m_tiles = (Tile*)arena_push(&m_arena_level, sizeof(Tile) * m_rows * m_columns);
-	m_tiles_size = m_columns * m_rows;
+	game->is_playable          = true;
+	game->columns           = 30;
+	game->rows              = 16;
+	game->mine_count        = 90;
+	game->flag_count        = 0;
+	game->tiles = (Tile*)arena_push(&game->arena_level, sizeof(Tile) * game->rows * game->columns);
+	game->tiles_count = game->columns * game->rows;
 	
 	// nb: Index array for shuffling, used for mine selection
-	m_mine_indices = (u32*)arena_push(&m_arena_level, (sizeof(u32) * m_tiles_size));
+	game->mine_indices = (u32*)arena_push(&game->arena_level, (sizeof(u32) * game->tiles_count));
 	
 	// nb: Populate board
-	for(int i = 0; i < m_tiles_size; i++)
+	for(int i = 0; i < game->tiles_count; i++)
 	{
 		Tile tile;
 		tile.sprite = sprites[TILE_DEFAULT];
-		m_tiles[i] = tile;
+		game->tiles[i] = tile;
 		// nb: Populate index array
-		m_mine_indices[i] = i;
+		game->mine_indices[i] = i;
 	}
 	
 	////////////////////////////////
 	//- nb: Pick mines at random
 	srand(time(NULL));
 	// shuffle index list
-	for(int i = m_tiles_size - 1; i > 0; i--)
+	for(int i = game->tiles_count - 1; i > 0; i--)
 	{
 		int j = rand() % (i + 1);
 		
-		int temp = m_mine_indices[i];
-		m_mine_indices[i] = m_mine_indices[j];
-		m_mine_indices[j] = temp;
+		int temp = game->mine_indices[i];
+		game->mine_indices[i] = game->mine_indices[j];
+		game->mine_indices[j] = temp;
 	}
 	// nb: Select n mines at random
-	for(int i = 0; i < m_mine_count; i++)
+	for(int i = 0; i < game->mine_count; i++)
 	{
-		int index = m_mine_indices[i];
-		Tile &tile = m_tiles[index];
+		int index = game->mine_indices[i];
+		Tile &tile = game->tiles[index];
 		tile.is_mine = true;
 		//tile.sprite = sprites[TILE_MINE];
 	}
 	
 	////////////////////////////////
 	//- nb: Set the neighboring mine count for all tiles
-	for(int i = 0; i < m_mine_count; i++)
+	for(int i = 0; i < game->mine_count; i++)
 	{
 		u32 neighbor_idx_list[8] = {0};
 		u32 neighbor_idx_list_count = 0;
-		GetNeighbors(m_mine_indices[i], neighbor_idx_list, &neighbor_idx_list_count);
+		game_get_neighbors_by_idx(game, game->mine_indices[i], neighbor_idx_list, &neighbor_idx_list_count);
 		for(int j = 0; j < neighbor_idx_list_count; j++)
 		{
-			if(!m_tiles[neighbor_idx_list[j]].is_mine)
-				m_tiles[neighbor_idx_list[j]].neighbor_count++;
+			if(!game->tiles[neighbor_idx_list[j]].is_mine)
+				game->tiles[neighbor_idx_list[j]].neighbor_count++;
 		}
 	}
 }
 
 
-bool Game::RevealTile(u32 idx)
+internal bool 
+game_reveal_tile_by_idx(Game *game, u32 idx)
 {
-	Tile &tile = m_tiles[idx];
+	Tile &tile = game->tiles[idx];
 	
 	if(tile.is_swept)
 	{
@@ -207,8 +282,8 @@ bool Game::RevealTile(u32 idx)
 		if(tile.neighbor_count == 0)
 		{
 			tile.sprite = sprites[TILE_EMPTY];
-			m_floodfill_queue[m_floodfill_queue_count] = idx;
-			m_floodfill_queue_count++;
+			game->floodfill_queue[game->floodfill_queue_count] = idx;
+			game->floodfill_queue_count++;
 		} 
 		else
 		{
@@ -222,23 +297,23 @@ bool Game::RevealTile(u32 idx)
 		u32 flag_count = 0;
 		u32 neighbor_idx_list[8] = {0};
 		u32 neighbor_idx_list_count = 0;
-		GetNeighbors(idx, neighbor_idx_list, &neighbor_idx_list_count);
+		game_get_neighbors_by_idx(game, idx, neighbor_idx_list, &neighbor_idx_list_count);
 		
 		// nb: Count the neighboring flags
 		for(int i = 0; i < neighbor_idx_list_count; i++)
 		{
-			if(m_tiles[neighbor_idx_list[i]].has_flag)
+			if(game->tiles[neighbor_idx_list[i]].has_flag)
 				flag_count++;
 		}
 		if(flag_count == tile.neighbor_count)
 		{
 			for(int i = 0; i < neighbor_idx_list_count; i++)
 			{
-				Tile &nb = m_tiles[neighbor_idx_list[i]];
+				Tile &nb = game->tiles[neighbor_idx_list[i]];
 				
 				if(!nb.is_swept && !nb.has_flag)
 				{
-					if (RevealTile(neighbor_idx_list[i]))
+					if (game_reveal_tile_by_idx(game, neighbor_idx_list[i]))
 						return true;
 				}
 			}
@@ -248,23 +323,23 @@ bool Game::RevealTile(u32 idx)
 	
 	////////////////////////////////
 	//- nb: Flood fill
-	while(m_floodfill_queue_count > 0)
+	while(game->floodfill_queue_count > 0)
 	{
 		// nb: Pop a tile
-		u32 tile_idx = m_floodfill_queue[m_floodfill_queue_count - 1];
-		m_floodfill_queue_count--;
+		u32 tile_idx = game->floodfill_queue[game->floodfill_queue_count - 1];
+		game->floodfill_queue_count--;
 		
 		// nb: Sweep the current tile
-		m_tiles[tile_idx].is_swept = true;
-		m_tiles[tile_idx].sprite = sprites[TILE_EMPTY];
+		game->tiles[tile_idx].is_swept = true;
+		game->tiles[tile_idx].sprite = sprites[TILE_EMPTY];
 		
 		u32 neighbor_idx_list[8] = {0};
 		u32 neighbor_idx_list_count = 0;
-		GetNeighbors(tile_idx, neighbor_idx_list, &neighbor_idx_list_count);
+		game_get_neighbors_by_idx(game, tile_idx, neighbor_idx_list, &neighbor_idx_list_count);
 		// nb: Sweep every neighboring tile
 		for(int i = 0; i < neighbor_idx_list_count; i++)
 		{
-			Tile &neighbor = m_tiles[neighbor_idx_list[i]];
+			Tile &neighbor = game->tiles[neighbor_idx_list[i]];
 			if(neighbor.is_mine || neighbor.is_swept)
 				continue;
 			
@@ -274,8 +349,8 @@ bool Game::RevealTile(u32 idx)
 			if(neighbor.neighbor_count == 0)
 			{
 				neighbor.sprite = sprites[TILE_EMPTY];
-				m_floodfill_queue[m_floodfill_queue_count] = neighbor_idx_list[i];
-				m_floodfill_queue_count++;
+				game->floodfill_queue[game->floodfill_queue_count] = neighbor_idx_list[i];
+				game->floodfill_queue_count++;
 			}else
 			{
 				// nb: We can use [neighbor_count - 1] to set the sprite,
@@ -288,99 +363,46 @@ bool Game::RevealTile(u32 idx)
 	return false;
 }
 
-bool Game::RevealTile(u32 tile_x, u32 tile_y)
+internal bool 
+game_reveal_tile(Game *game, u32 tile_x, u32 tile_y)
 {
-	u32 idx = tile_y * m_columns + tile_x;
-	return RevealTile(idx);
+	u32 idx = tile_y * game->columns + tile_x;
+	return game_reveal_tile_by_idx(game, idx);
 }
 
-void Game::Gameover()
+void 
+game_gameover(Game *game)
 {
 	// nb: Reveal all mines
-	for(int i = 0; i < m_mine_count; i++)
+	for(int i = 0; i < game->mine_count; i++)
 	{
-		m_tiles[m_mine_indices[i]].sprite = sprites[TILE_MINE];
+		game->tiles[game->mine_indices[i]].sprite = sprites[TILE_MINE];
 	}
-	
-	m_playable = false;
-}
+	game->is_playable = false;
+};
 
 
-void Game::GetNeighbors(u32 idx, u32 neighbor_idx_list[8], u32 *neighbor_idx_list_count)
+void 
+game_render(Game *game)
 {
-	u32 tile_x = idx % m_columns;
-	u32 tile_y = idx / m_columns;
-	GetNeighbors(tile_x, tile_y, neighbor_idx_list, neighbor_idx_list_count);
-}
-////////////////////////////////
-// nb: This table shows the corresponding 1D array neighbor mappings
-//       1D ARRAY                2D ARRAY
-// [-W -1] [-W] [-W +1]  [-1, -1] [0, -1] [1, -1]
-// [   -1] [ n] [   +1]  [-1,  0] [    n] [1,  0]
-// [+W -1] [+W] [+W +1]  [-1,  1] [0,  1] [1,  1]
-////////////////////////////////
-void Game::GetNeighbors(u32 tile_x, u32 tile_y, u32 neighbor_idx_list[8], u32 *neighbor_idx_list_count)
-{
-	u32 count = 0;
-	
-	for (int dy = -1; dy <= 1; dy++) 
-	{
-		for (int dx = -1; dx <= 1; dx++) 
-		{
-			// nb: skip current tile
-			if (dx == 0 && dy == 0) 
-				continue;
-			
-			int nx = tile_x + dx;
-			int ny = tile_y + dy;
-			
-			// nb: bounds check
-			if (nx >= 0 && nx < m_columns && ny >= 0 && ny < m_rows) 
-			{
-				u32 neighbor_idx = ny * m_columns + nx;
-				neighbor_idx_list[count] = neighbor_idx;
-				count++;
-			}
-		}
-	}
-	*neighbor_idx_list_count = count;
-}
-
-
-Tile &Game::GridToTile(u32 tile_x, u32 tile_y)
-{
-	ASSERT(tile_x < m_columns && tile_y < m_rows);
-	u32 idx = tile_y * m_columns + tile_x;
-	return GetTile(idx);
-}
-
-Tile &Game::GetTile(u32 idx)
-{
-	ASSERT(idx < m_tiles_size);
-	return m_tiles[idx];
-}
-
-
-void Game::Render()
-{
-	arena_clear(&m_arena_frame);
+	arena_clear(&game->arena_frame);
 	
 	const float color[4]{0.25f, 0.25f, 0.25f, 1.0f};
-	m_renderer->Clear(color);
+	game->renderer->Clear(color);
 	
 	
 	//- nb: submit board batch to GPU
-	InstanceData *instance_data = (InstanceData*)arena_push(&m_arena_frame, sizeof(InstanceData) * m_tiles_size);
-	for (int i = 0; i < m_tiles_size; i++)
+	InstanceData *instance_data = (InstanceData*)arena_push(&game->arena_frame, sizeof(InstanceData) * game->tiles_count);
+	for (int i = 0; i < game->tiles_count; i++)
 	{
-		int x = i % m_columns;
-		int y = i / m_columns;
+		int x = i % game->columns;
+		int y = i / game->columns;
 		
-		Tile &tile = m_tiles[i];
+		Tile &tile = game->tiles[i];
 		instance_data[i] = { {(float)x,(float)y}, tile.sprite};
 	}
 	
-	m_renderer->SubmitBatch(instance_data, m_tiles_size, m_spritesheetID);
+	game->renderer->SubmitBatch(instance_data, game->tiles_count, game->spritesheetID);
 	
-	m_renderer->Present();
+	game->renderer->Present();
 }
