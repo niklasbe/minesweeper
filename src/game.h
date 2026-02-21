@@ -33,8 +33,7 @@ struct Game
 	
 	
 	////////////////////////////////
-	R_D3D11_State *renderer;
-	u32           spritesheetID;
+	u32           spritesheet_id;
 	u32           *floodfill_queue;
 	u32           floodfill_queue_count = 0;
 	u32           *mine_indices;
@@ -52,17 +51,19 @@ struct Game
 };
 
 
-void game_init(Game *, Arena *);
-void game_destroy(Game *);
+void game_init(Arena *arena);
+void game_destroy();
 
-void game_set_window(Game *, void *, u32, u32);
-void game_mouse_up(Game *, u32, u32);
-void game_mouse_down(Game *, u32, u32);
-void game_size_changed(Game *, u32, u32);
+void game_set_window(void *window_handle, u32 width, u32 height);
+void game_mouse_up(u32 x, u32 y);
+void game_mouse_down(u32 x, u32 y);
+void game_size_changed(u32 w, u32 h);
 
-void game_gameover(Game *);
+void game_gameover();
 
-void game_reset(Game *);
-void game_render(Game *);
+void game_reset();
+void game_render();
+
+global Game *g_game = {0};;
 
 #endif //GAME_H

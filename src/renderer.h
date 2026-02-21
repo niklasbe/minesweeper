@@ -5,10 +5,6 @@
 #include <wincodec.h>
 #include <DirectXMath.h>
 
-
-struct Board; 
-
-
 ////////////////////////////////
 //~ nb: Per Instance Data
 struct InstanceData
@@ -20,33 +16,9 @@ struct InstanceData
 
 ////////////////////////////////
 //~ nb: D3D11 Renderer
-class R_D3D11_State
+struct R_D3D11_State
 {
 	//-
-	public:
-	
-	void Init();
-	void Destroy();
-	void CreateDeviceResources();
-	void CreateWindowSizeDependentResources();
-	void SetWindow(void *window_handle, UINT, UINT);
-	void WindowSizeChanged(UINT, UINT);
-	void HandleDeviceLost();
-	
-	void Clear(const float *color);
-	void Present();
-	
-	void SubmitBatch(const InstanceData *, u32, u32);
-	
-	u32 LoadTexture(const wchar_t *filename, Arena &arena);
-	
-	void SetSpritesheet(ID3D11ShaderResourceView *texture);
-	
-	//-
-	private:
-	void CreateWICFactory();
-	void CreateWICTextureFromFile(const wchar_t *filename, ID3D11ShaderResourceView **texture_view, Arena &arena);
-	
 	// TODO(nb): reset on device lost
 	ID3D11ShaderResourceView *m_spritesheet;
 	Arena                    *m_arena;
@@ -62,11 +34,11 @@ class R_D3D11_State
     u32                     height;
     D3D11_VIEWPORT          viewport;
 	////////////////////////////////
-	DirectX::XMMATRIX       m_projection;
-	DirectX::XMMATRIX       m_translation;
-	DirectX::XMMATRIX       m_scale;
-	DirectX::XMMATRIX       m_world;
-	DirectX::XMMATRIX       m_final_transform;
+	DirectX::XMMATRIX       projection;
+	DirectX::XMMATRIX       translation;
+	DirectX::XMMATRIX       scale;
+	DirectX::XMMATRIX       world;
+	DirectX::XMMATRIX       final_transform;
 	////////////////////////////////
     //- nb: D3D11 context
 	ID3D11Device            *base_device;
@@ -96,9 +68,26 @@ class R_D3D11_State
 	ID3D11Buffer            *instance_buffer;
 	////////////////////////////////
 	IWICImagingFactory       *wic_factory;
-	ID3D11ShaderResourceView *m_textures[4];
-	u32                       m_textures_count;
+	ID3D11ShaderResourceView *textures[4];
+	u32                       textures_count;
 	
 };
+
+void r_init();
+void r_destroy();
+void r_create_device_resources();
+void r_create_window_size_dependent_resources();
+void r_set_window(void *window_handle, u32 width, u32 height);
+void r_window_size_changed(u32 width, u32 height);
+void r_handle_device_lost();
+
+u32 r_load_texture(const wchar_t *filename, Arena *arena);
+
+void r_submit_batch(const InstanceData *data, u32 data_len, u32 texture_id);
+void r_clear(const float *color);
+void r_present();
+
+global R_D3D11_State *r_d3d11_state = {0};
+
 
 #endif //RENDERER_H

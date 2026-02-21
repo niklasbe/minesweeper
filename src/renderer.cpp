@@ -100,6 +100,11 @@ enum TileKind
 	TILE_END
 };
 
+
+internal void r_set_spritesheet(ID3D11ShaderResourceView *texture);
+internal void r_create_wic_factory();
+internal void r_create_wic_texture_from_file(const wchar_t *filename, ID3D11ShaderResourceView **texture_view, Arena *arena);
+
 //- nb: Static uv offsets for every tile in the sheet
 static const DirectX::XMFLOAT2 sprites[] =
 {
@@ -109,69 +114,72 @@ static const DirectX::XMFLOAT2 sprites[] =
 	{0.0f, 0.75f},  {0.25f, 0.75f},  {0.50f, 0.75f}, {0.75f, 0.75f},
 };
 
-void R_D3D11_State::Init()
+void 
+r_init(Arena *arena)
 {
-	CreateDeviceResources();
-	CreateWICFactory();
+	r_d3d11_state = (R_D3D11_State*)arena_push(arena, sizeof(R_D3D11_State));
+	r_create_device_resources();
+	r_create_wic_factory();
 }
 
-void R_D3D11_State::Destroy()
+void
+r_destroy()
 {
-	
-	if(context)
+	if(r_d3d11_state->context)
 	{
-		context->OMSetRenderTargets(0, NULL, NULL);
-		context->ClearState();
-		context->Flush();
+		r_d3d11_state->context->OMSetRenderTargets(0, NULL, NULL);
+		r_d3d11_state->context->ClearState();
+		r_d3d11_state->context->Flush();
 	}
 	
-	for(int i = 0; i < m_textures_count; i++)
-		SAFE_RELEASE(m_textures[i]);
+	for(int i = 0; i < r_d3d11_state->textures_count; i++)
+		SAFE_RELEASE(r_d3d11_state->textures[i]);
 	
-	SAFE_RELEASE(framebuffer_rtv);
-	SAFE_RELEASE(framebuffer);
-	SAFE_RELEASE(swapchain);
+	SAFE_RELEASE(r_d3d11_state->framebuffer_rtv);
+	SAFE_RELEASE(r_d3d11_state->framebuffer);
+	SAFE_RELEASE(r_d3d11_state->swapchain);
 	
 	// nb: shader frees
-	SAFE_RELEASE(constant_buffers[0]);
-	SAFE_RELEASE(pixel_shaders[0]);
-	SAFE_RELEASE(input_layouts[0]);
-	SAFE_RELEASE(vertex_shaders[0]);
+	SAFE_RELEASE(r_d3d11_state->constant_buffers[0]);
+	SAFE_RELEASE(r_d3d11_state->pixel_shaders[0]);
+	SAFE_RELEASE(r_d3d11_state->input_layouts[0]);
+	SAFE_RELEASE(r_d3d11_state->vertex_shaders[0]);
 	
-	SAFE_RELEASE(vertex_buffer);
-	SAFE_RELEASE(index_buffer);
-	SAFE_RELEASE(instance_buffer);
+	SAFE_RELEASE(r_d3d11_state->vertex_buffer);
+	SAFE_RELEASE(r_d3d11_state->index_buffer);
+	SAFE_RELEASE(r_d3d11_state->instance_buffer);
 	
 	// nb: depth/stencil states
-	SAFE_RELEASE(plain_depth_stencil);
-	SAFE_RELEASE(noop_depth_stencil);
+	SAFE_RELEASE(r_d3d11_state->plain_depth_stencil);
+	SAFE_RELEASE(r_d3d11_state->noop_depth_stencil);
 	
 	// nb: samplers
-	SAFE_RELEASE(linear_sampler);
-	SAFE_RELEASE(point_sampler);
+	SAFE_RELEASE(r_d3d11_state->linear_sampler);
+	SAFE_RELEASE(r_d3d11_state->point_sampler);
 	
 	// nb: blend states
-	SAFE_RELEASE(no_blend_state);
-	SAFE_RELEASE(main_blend_state);
+	SAFE_RELEASE(r_d3d11_state->no_blend_state);
+	SAFE_RELEASE(r_d3d11_state->main_blend_state);
 	
-	SAFE_RELEASE(main_rasterizer);
+	SAFE_RELEASE(r_d3d11_state->main_rasterizer);
 	
 	// nb: dxgi
-	SAFE_RELEASE(dxgi_device);
-	SAFE_RELEASE(dxgi_adapter);
-	SAFE_RELEASE(dxgi_factory);
+	SAFE_RELEASE(r_d3d11_state->dxgi_device);
+	SAFE_RELEASE(r_d3d11_state->dxgi_adapter);
+	SAFE_RELEASE(r_d3d11_state->dxgi_factory);
 	
 	// nb: d3d contexts
-	SAFE_RELEASE(context);
-	SAFE_RELEASE(device);
-	SAFE_RELEASE(base_context);
-	SAFE_RELEASE(base_device);
+	SAFE_RELEASE(r_d3d11_state->context);
+	SAFE_RELEASE(r_d3d11_state->device);
+	SAFE_RELEASE(r_d3d11_state->base_context);
+	SAFE_RELEASE(r_d3d11_state->base_device);
 	
-	SAFE_RELEASE(wic_factory);
+	SAFE_RELEASE(r_d3d11_state->wic_factory);
 }
 
 
-void R_D3D11_State::CreateDeviceResources()
+void 
+r_create_device_resources()
 {
 	OutputDebugString("CreateDeviceResources\n");
 	
@@ -189,11 +197,11 @@ void R_D3D11_State::CreateDeviceResources()
 									creation_flags,
 									feature_levels, ARRAYSIZE(feature_levels),
 									D3D11_SDK_VERSION,
-									&base_device, 0, &base_context);
+									&r_d3d11_state->base_device, 0, &r_d3d11_state->base_context);
 #ifdef _DEBUG
 	// nb: enable debug break-on-error
 	ID3D11InfoQueue *info = 0;
-	hr = base_device->QueryInterface(IID_ID3D11InfoQueue, (void **)(&info));
+	hr = r_d3d11_state->base_device->QueryInterface(IID_ID3D11InfoQueue, (void **)(&info));
 	if(SUCCEEDED(hr))
 	{
 		hr = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
@@ -204,19 +212,19 @@ void R_D3D11_State::CreateDeviceResources()
 	
 	
 	// nb: get main device
-	base_device->QueryInterface(IID_ID3D11Device1, (void**)(&device));
-	base_context->QueryInterface(IID_ID3D11DeviceContext1, (void**)(&context));
+	r_d3d11_state->base_device->QueryInterface(IID_ID3D11Device1, (void**)(&r_d3d11_state->device));
+	r_d3d11_state->base_context->QueryInterface(IID_ID3D11DeviceContext1, (void**)(&r_d3d11_state->context));
 	
 	// nb: get dxgi device/adapter/factory
-	device->QueryInterface(IID_IDXGIDevice1, (void**)(&dxgi_device));
-	dxgi_device->GetAdapter(&dxgi_adapter);
-	dxgi_adapter->GetParent(IID_IDXGIFactory2, (void**)(&dxgi_factory));
+	r_d3d11_state->device->QueryInterface(IID_IDXGIDevice1, (void**)(&r_d3d11_state->dxgi_device));
+	r_d3d11_state->dxgi_device->GetAdapter(&r_d3d11_state->dxgi_adapter);
+	r_d3d11_state->dxgi_adapter->GetParent(IID_IDXGIFactory2, (void**)(&r_d3d11_state->dxgi_factory));
 	
-	ASSERT(device);
-	ASSERT(context);
-	ASSERT(dxgi_device);
-	ASSERT(dxgi_adapter);
-	ASSERT(dxgi_factory);
+	ASSERT(r_d3d11_state->device);
+	ASSERT(r_d3d11_state->context);
+	ASSERT(r_d3d11_state->dxgi_device);
+	ASSERT(r_d3d11_state->dxgi_adapter);
+	ASSERT(r_d3d11_state->dxgi_factory);
 	
 	// nb: create main rasterizer
 	{
@@ -226,7 +234,7 @@ void R_D3D11_State::CreateDeviceResources()
 			desc.CullMode = D3D11_CULL_BACK;
 			desc.ScissorEnable = 1;
 		}
-		device->CreateRasterizerState1(&desc, &main_rasterizer);
+		r_d3d11_state->device->CreateRasterizerState1(&desc, &r_d3d11_state->main_rasterizer);
 	}
 	
 	// nb: create main blend state
@@ -242,7 +250,7 @@ void R_D3D11_State::CreateDeviceResources()
 			desc.RenderTarget[0].BlendOpAlpha           = D3D11_BLEND_OP_ADD;
 			desc.RenderTarget[0].RenderTargetWriteMask  = D3D11_COLOR_WRITE_ENABLE_ALL;
 		}
-		device->CreateBlendState(&desc, &main_blend_state);
+		r_d3d11_state->device->CreateBlendState(&desc, &r_d3d11_state->main_blend_state);
 	};
 	
 	// nb: create empty blend state
@@ -251,7 +259,7 @@ void R_D3D11_State::CreateDeviceResources()
 		{
 			desc.RenderTarget[0].BlendEnable = 0;
 		}
-		device->CreateBlendState(&desc, &no_blend_state);
+		r_d3d11_state->device->CreateBlendState(&desc, &r_d3d11_state->no_blend_state);
 	}
 	
 	// nb: create nearest-neighbor sampler
@@ -264,7 +272,7 @@ void R_D3D11_State::CreateDeviceResources()
 			desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
 			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 		}
-		device->CreateSamplerState(&desc, &point_sampler);
+		r_d3d11_state->device->CreateSamplerState(&desc, &r_d3d11_state->point_sampler);
 	}
 	
 	// nb: create bilinear sampler
@@ -277,7 +285,7 @@ void R_D3D11_State::CreateDeviceResources()
 			desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
 			desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 		}
-		device->CreateSamplerState(&desc, &linear_sampler);
+		r_d3d11_state->device->CreateSamplerState(&desc, &r_d3d11_state->linear_sampler);
 	}
 	
 	// nb: create noop depth/stencil state
@@ -288,7 +296,7 @@ void R_D3D11_State::CreateDeviceResources()
 			desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 			desc.DepthFunc      = D3D11_COMPARISON_LESS;
 		}
-		device->CreateDepthStencilState(&desc, &noop_depth_stencil);
+		r_d3d11_state->device->CreateDepthStencilState(&desc, &r_d3d11_state->noop_depth_stencil);
 	}
 	
 	// nb: create plain depth/stencil state
@@ -299,7 +307,7 @@ void R_D3D11_State::CreateDeviceResources()
 			desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 			desc.DepthFunc      = D3D11_COMPARISON_LESS;
 		}
-		device->CreateDepthStencilState(&desc, &plain_depth_stencil);
+		r_d3d11_state->device->CreateDepthStencilState(&desc, &r_d3d11_state->plain_depth_stencil);
 	}
 	
 	// nb: build vertex shaders and input layouts
@@ -330,10 +338,10 @@ void R_D3D11_State::CreateDeviceResources()
 			}
 			else
 			{
-				device->CreateVertexShader(vshad_source_blob->GetBufferPointer(),
-										   vshad_source_blob->GetBufferSize(),
-										   0,
-										   &vshad);
+				r_d3d11_state->device->CreateVertexShader(vshad_source_blob->GetBufferPointer(),
+														  vshad_source_blob->GetBufferSize(),
+														  0,
+														  &vshad);
 			}
 		}
 		
@@ -349,16 +357,16 @@ void R_D3D11_State::CreateDeviceResources()
 				{ "IPOS", 0, DXGI_FORMAT_R32G32_FLOAT,      1,                            0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
 				{ "IUV",  0,DXGI_FORMAT_R32G32_FLOAT,       1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
 			};
-			device->CreateInputLayout(desc,
-									  ARRAYSIZE(desc),
-									  vshad_source_blob->GetBufferPointer(),
-									  vshad_source_blob->GetBufferSize(),
-									  &ilay);
+			r_d3d11_state->device->CreateInputLayout(desc,
+													 ARRAYSIZE(desc),
+													 vshad_source_blob->GetBufferPointer(),
+													 vshad_source_blob->GetBufferSize(),
+													 &ilay);
 		}
 		vshad_source_blob->Release();
 		
-		vertex_shaders[0] = vshad;
-		input_layouts[0] = ilay;
+		r_d3d11_state->vertex_shaders[0] = vshad;
+		r_d3d11_state->input_layouts[0] = ilay;
 	}
 	
 	// nb: build pixel shaders
@@ -388,14 +396,14 @@ void R_D3D11_State::CreateDeviceResources()
 			}
 			else
 			{
-				device->CreatePixelShader(pshad_source_blob->GetBufferPointer(),
-										  pshad_source_blob->GetBufferSize(),
-										  0,
-										  &pshad);
+				r_d3d11_state->device->CreatePixelShader(pshad_source_blob->GetBufferPointer(),
+														 pshad_source_blob->GetBufferSize(),
+														 0,
+														 &pshad);
 			}
 			
 			pshad_source_blob->Release();
-			pixel_shaders[0] = pshad;
+			r_d3d11_state->pixel_shaders[0] = pshad;
 		}
 	}
 	
@@ -413,9 +421,9 @@ void R_D3D11_State::CreateDeviceResources()
 				desc.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
 				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 			}
-			device->CreateBuffer(&desc, 0, &buffer);
+			r_d3d11_state->device->CreateBuffer(&desc, 0, &buffer);
 		}
-		constant_buffers[0] = buffer;
+		r_d3d11_state->constant_buffers[0] = buffer;
 	}
 	
 	// nb: build vertex buffers
@@ -439,7 +447,7 @@ void R_D3D11_State::CreateDeviceResources()
 		}
 		
 		D3D11_SUBRESOURCE_DATA data = {vertices};
-		device->CreateBuffer(&desc, &data, &vertex_buffer);
+		r_d3d11_state->device->CreateBuffer(&desc, &data, &r_d3d11_state->vertex_buffer);
 	}
 	
 	// nb: build index buffer
@@ -458,7 +466,7 @@ void R_D3D11_State::CreateDeviceResources()
 		}
 		
 		D3D11_SUBRESOURCE_DATA data= {indices};
-		device->CreateBuffer(&desc, &data, &index_buffer);
+		r_d3d11_state->device->CreateBuffer(&desc, &data, &r_d3d11_state->index_buffer);
 	}
 	// nb: build instance buffer
 	{
@@ -471,41 +479,43 @@ void R_D3D11_State::CreateDeviceResources()
 				desc.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
 				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 			}
-			device->CreateBuffer(&desc, 0, &buffer);
+			r_d3d11_state->device->CreateBuffer(&desc, 0, &buffer);
 		}
-		instance_buffer = buffer;
+		r_d3d11_state->instance_buffer = buffer;
 	}
 	
 }
 
-void R_D3D11_State::CreateWindowSizeDependentResources()
+void
+r_create_window_size_dependent_resources()
 {
 	OutputDebugString("CreateWindowSizeDependentResources\n");
-	ASSERT(hwnd);
+	ASSERT(r_d3d11_state->hwnd);
 	
-	context->OMSetRenderTargets(0, NULL, NULL);
-	SAFE_RELEASE(framebuffer_rtv);
-	SAFE_RELEASE(framebuffer);
+	r_d3d11_state->context->OMSetRenderTargets(0, NULL, NULL);
+	SAFE_RELEASE(r_d3d11_state->framebuffer_rtv);
+	SAFE_RELEASE(r_d3d11_state->framebuffer);
 	
-	context->Flush();
+	r_d3d11_state->context->Flush();
 	// if swapchain is already created, resize it
-	if(swapchain)
+	if(r_d3d11_state->swapchain)
 	{
-		HRESULT hr = swapchain->ResizeBuffers(0, //preserve buffer count
-											  width, height,
-											  DXGI_FORMAT_UNKNOWN,
-											  DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+		HRESULT hr = r_d3d11_state->swapchain->ResizeBuffers(0, //preserve buffer count
+															 r_d3d11_state->width, 
+															 r_d3d11_state->height,
+															 DXGI_FORMAT_UNKNOWN,
+															 DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
 		// if device gets lost somehow (driver crash?)
 		if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
 		{
 #ifdef _DEBUG
 			char buff[64];
-			u32 reason = (hr == DXGI_ERROR_DEVICE_REMOVED) ? device->GetDeviceRemovedReason() : hr;
+			u32 reason = (hr == DXGI_ERROR_DEVICE_REMOVED) ? r_d3d11_state->device->GetDeviceRemovedReason() : hr;
             sprintf_s(buff, sizeof(buff), "Device Lost on ResizeBuffers: Reason code 0x%08X\n", reason);
             OutputDebugString(buff);
 #endif
 			// If the device was removed for any reason, a new device and swap chain will need to be created
-			HandleDeviceLost();
+			r_handle_device_lost();
 			// Exit for now. HandleDeviceLost() will re-enter this function and properly set up the new device
 			return;
 		}
@@ -517,8 +527,8 @@ void R_D3D11_State::CreateWindowSizeDependentResources()
 	{
 		DXGI_SWAP_CHAIN_DESC1 swapchain_desc = {0};
 		{
-			swapchain_desc.Width              = width; 
-			swapchain_desc.Height             = height;
+			swapchain_desc.Width              = r_d3d11_state->width; 
+			swapchain_desc.Height             = r_d3d11_state->height;
 			//swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM; 
 			swapchain_desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
 			swapchain_desc.Stereo             = FALSE;
@@ -531,68 +541,74 @@ void R_D3D11_State::CreateWindowSizeDependentResources()
 			swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
 			swapchain_desc.Flags              = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 		}
-		HRESULT hr = dxgi_factory->CreateSwapChainForHwnd((IUnknown *)device,
-														  hwnd,
-														  &swapchain_desc,
-														  0, // no fullscreen descriptor
-														  0, 
-														  &swapchain);
+		HRESULT hr = r_d3d11_state->dxgi_factory->CreateSwapChainForHwnd((IUnknown *)r_d3d11_state->device,
+																		 r_d3d11_state->hwnd,
+																		 &swapchain_desc,
+																		 0, // no fullscreen descriptor
+																		 0, 
+																		 &r_d3d11_state->swapchain);
 		ASSERT(SUCCEEDED(hr)); 
 		
 		// This program does not support exclusive fullscreen, has no fullscreen descriptor. Prevent DXGI from responding to ALT+ENTER keybind
-		dxgi_factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
+		r_d3d11_state->dxgi_factory->MakeWindowAssociation(r_d3d11_state->hwnd, DXGI_MWA_NO_ALT_ENTER);
 	}
 	
 	// nb: get the frame buffer and rtv
-	swapchain->GetBuffer(0, IID_ID3D11Texture2D, (void**)&framebuffer);
-	device->CreateRenderTargetView(framebuffer, 0, &framebuffer_rtv);
+	r_d3d11_state->swapchain->GetBuffer(0, IID_ID3D11Texture2D, (void**)&r_d3d11_state->framebuffer);
+	r_d3d11_state->device->CreateRenderTargetView(r_d3d11_state->framebuffer, 0, &r_d3d11_state->framebuffer_rtv);
 	
-	viewport = D3D11_VIEWPORT{0.0f, 0.0f, (float)width, (float)height, 0.0f, 1.0f};
+	r_d3d11_state->viewport = D3D11_VIEWPORT{0.0f, 0.0f, (float)r_d3d11_state->width, (float)r_d3d11_state->height, 0.0f, 1.0f};
 	
-	// nb: update matrices
-	m_projection = DirectX::XMMatrixOrthographicOffCenterLH(0.0f, (float)width, 
-															(float)height, 0.0f, 
-															0.0f, 1.0f);
-	m_scale = DirectX::XMMatrixScaling(32.0f, 32.0f, 1.0f);
-	m_translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
-	m_world = m_scale * m_translation;
-	m_final_transform = m_world * m_projection;
 	
+	////////////////////////////////
+	//- nb: Matrix updates
+	r_d3d11_state->projection = DirectX::XMMatrixOrthographicOffCenterLH(0.0f, 
+																		 (float)r_d3d11_state->width, 
+																		 (float)r_d3d11_state->height, 
+																		 0.0f, 
+																		 0.0f, 1.0f);
+	r_d3d11_state->scale = DirectX::XMMatrixScaling(32.0f, 32.0f, 1.0f);
+	r_d3d11_state->translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
+	r_d3d11_state->world = r_d3d11_state->scale * r_d3d11_state->translation;
+	r_d3d11_state->final_transform = r_d3d11_state->world * r_d3d11_state->projection;
+	////////////////////////////////
 	
 	
 	// nb: render pipeline
-	context->RSSetViewports(1, &viewport);
-	D3D11_RECT rect = {0, 0, (LONG)width, (LONG)height};
-	context->RSSetScissorRects(1, &rect);
+	r_d3d11_state->context->RSSetViewports(1, &r_d3d11_state->viewport);
+	D3D11_RECT rect = {0, 0, (LONG)r_d3d11_state->width, (LONG)r_d3d11_state->height};
+	r_d3d11_state->context->RSSetScissorRects(1, &rect);
 	
-	context->OMSetDepthStencilState(plain_depth_stencil, 1);
-	context->RSSetState(main_rasterizer);
+	r_d3d11_state->context->OMSetDepthStencilState(r_d3d11_state->plain_depth_stencil, 1);
+	r_d3d11_state->context->RSSetState(r_d3d11_state->main_rasterizer);
 	
-	context->IASetIndexBuffer(index_buffer, DXGI_FORMAT_R32_UINT, 0);
-	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	r_d3d11_state->context->IASetIndexBuffer(r_d3d11_state->index_buffer, DXGI_FORMAT_R32_UINT, 0);
+	r_d3d11_state->context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
-	context->IASetInputLayout(input_layouts[0]);
-	context->VSSetShader(vertex_shaders[0], NULL, 0);
-	context->PSSetShader(pixel_shaders[0], NULL, 0);
-	context->PSSetSamplers(0, 1, &point_sampler);
-	context->OMSetRenderTargets(1, &framebuffer_rtv, NULL);
+	r_d3d11_state->context->IASetInputLayout(r_d3d11_state->input_layouts[0]);
+	r_d3d11_state->context->VSSetShader(r_d3d11_state->vertex_shaders[0], NULL, 0);
+	r_d3d11_state->context->PSSetShader(r_d3d11_state->pixel_shaders[0], NULL, 0);
+	r_d3d11_state->context->PSSetSamplers(0, 1, &r_d3d11_state->point_sampler);
+	r_d3d11_state->context->OMSetRenderTargets(1, &r_d3d11_state->framebuffer_rtv, NULL);
 }
 
-void R_D3D11_State::SetWindow(void *window_handle, UINT width, UINT height)
+void
+r_set_window(void *window_handle, u32 width, u32 height)
 {
-	this->hwnd = (HWND)window_handle;
-	this->width = width;
-	this->height = height;
+	r_d3d11_state->hwnd = (HWND)window_handle;
+	r_d3d11_state->width = width;
+	r_d3d11_state->height = height;
 }
 
-void R_D3D11_State::WindowSizeChanged(UINT width, UINT height)
+void
+r_window_size_changed(u32 width, u32 height)
 {
 	// only resize if the size differs
-	if(this->width != width || this->height != height)
+	if(r_d3d11_state->width != width || r_d3d11_state->height != height)
 	{
-		this->width = width;
-		this->height = height;
-		CreateWindowSizeDependentResources();
+		r_d3d11_state->width = width;
+		r_d3d11_state->height = height;
+		r_create_window_size_dependent_resources();
 	}
 	
 	/*
@@ -603,105 +619,114 @@ void R_D3D11_State::WindowSizeChanged(UINT width, UINT height)
 	}*/
 }
 
-void R_D3D11_State::HandleDeviceLost()
+void
+r_handle_device_lost()
 {
 #ifdef _DEBUG
 	ID3D11Debug *d3d_debug;
-	device->QueryInterface(IID_ID3D11Debug, (void **)&d3d_debug);
+	r_d3d11_state->device->QueryInterface(IID_ID3D11Debug, (void **)&d3d_debug);
 	d3d_debug->ReportLiveDeviceObjects(D3D11_RLDO_SUMMARY);
 	d3d_debug->Release();
 #endif
 	
-	Destroy();
-	CreateDeviceResources();
-	CreateWindowSizeDependentResources();
+	r_destroy();
+	r_create_device_resources();
+	r_create_window_size_dependent_resources();
 }
 
-void R_D3D11_State::Clear(const float *color)
+void
+r_clear(const float *color)
 {
-	context->OMSetRenderTargets(1, &framebuffer_rtv, NULL);
-	context->ClearRenderTargetView(framebuffer_rtv, color);
-	
+	r_d3d11_state->context->OMSetRenderTargets(1, &r_d3d11_state->framebuffer_rtv, NULL);
+	r_d3d11_state->context->ClearRenderTargetView(r_d3d11_state->framebuffer_rtv, color);
 }
 
-void R_D3D11_State::Present()
+void 
+r_present()
 {
-	
 	//- nb: Constant Transform Buffer
     {
-		TransformBuffer transform{m_final_transform};
+		TransformBuffer transform{r_d3d11_state->final_transform};
 		
 		D3D11_MAPPED_SUBRESOURCE mapped;
 		{
-			context->Map(constant_buffers[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+			r_d3d11_state->context->Map(r_d3d11_state->constant_buffers[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 			CopyMemory(mapped.pData, &transform, sizeof(TransformBuffer));
-			context->Unmap(constant_buffers[0], 0);
+			r_d3d11_state->context->Unmap(r_d3d11_state->constant_buffers[0], 0);
 		}
-		context->VSSetConstantBuffers(0, 1, &constant_buffers[0]);
+		r_d3d11_state->context->VSSetConstantBuffers(0, 1, &r_d3d11_state->constant_buffers[0]);
 	}
 	
-	HRESULT hr = swapchain->Present(1, 0);
+	HRESULT hr = r_d3d11_state->swapchain->Present(1, 0);
 	////////////////////////////////
 	
 	if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
     {
 #ifdef _DEBUG
 		char buff[64];
-		u32 reason = (hr == DXGI_ERROR_DEVICE_REMOVED) ? device->GetDeviceRemovedReason() : hr;
+		u32 reason = (hr == DXGI_ERROR_DEVICE_REMOVED) ? r_d3d11_state->device->GetDeviceRemovedReason() : hr;
 		sprintf_s(buff, sizeof(buff), "Device Lost on ResizeBuffers: Reason code 0x%08X\n", reason);
 		OutputDebugString(buff);
 #endif
 		// If the device was removed for any reason, a new device and swap chain will need to be created
-		HandleDeviceLost();
+		r_handle_device_lost();
 	}
 }
 
-void R_D3D11_State::SubmitBatch(const InstanceData *instance_data, u32 length, u32 textureID)
+void
+r_submit_batch(const InstanceData *instance_data, u32 length, u32 texture_id)
 {
 	//- nb: Fill instance buffer
 	D3D11_MAPPED_SUBRESOURCE mapped;
 	{
-		context->Map(instance_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+		r_d3d11_state->context->Map(r_d3d11_state->instance_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 		CopyMemory(mapped.pData, instance_data, sizeof(InstanceData) * length);
-		context->Unmap(instance_buffer, 0);
+		r_d3d11_state->context->Unmap(r_d3d11_state->instance_buffer, 0);
 	}
 	
 	//- nb: Set buffers
 	{
 		UINT strides[2] = { sizeof(Vertex), sizeof(InstanceData) };
 		UINT offsets[2] = { 0, 0 };
-		ID3D11Buffer *buffers[2] = { vertex_buffer, instance_buffer };
-		context->IASetVertexBuffers(0, 2, buffers, strides, offsets);
+		ID3D11Buffer *buffers[2] = { r_d3d11_state->vertex_buffer, r_d3d11_state->instance_buffer };
+		r_d3d11_state->context->IASetVertexBuffers(0, 2, buffers, strides, offsets);
 	}
 	
 	
-	context->PSSetShaderResources(0, 1, &m_textures[textureID]);
-	context->DrawIndexedInstanced(6,             // indices,
-								  length,        // num
-								  0,             // start index loc
-								  0,             // base vertex loc
-								  0);            // start instance loc
+	r_d3d11_state->context->PSSetShaderResources(0, 1, &r_d3d11_state->textures[texture_id]);
+	r_d3d11_state->context->DrawIndexedInstanced(6,             // indices,
+												 length,        // num
+												 0,             // start index loc
+												 0,             // base vertex loc
+												 0);            // start instance loc
 }
 
 // TODO(nb): Decide on this
 using Microsoft::WRL::ComPtr;
 
-u32 R_D3D11_State::LoadTexture(const wchar_t *filename, Arena &arena)
+u32
+r_load_texture(const wchar_t *filename, Arena *arena)
 {
-	u32 id = m_textures_count++;
-	CreateWICTextureFromFile(filename, &m_textures[id], arena);
+	u32 id = r_d3d11_state->textures_count++;
+	r_create_wic_texture_from_file(filename, &r_d3d11_state->textures[id], arena);
 	return id;
 }
 
-void R_D3D11_State::CreateWICTextureFromFile(const wchar_t *filename,
-											 ID3D11ShaderResourceView **texture_view,
-											 Arena &arena)
+
+internal void
+r_create_wic_texture_from_file(const wchar_t *filename, 
+							   ID3D11ShaderResourceView **texture_view,
+							   Arena *arena)
 {
 	// TODO(nb): error checking
 	HRESULT hr = S_OK;
     // nb: create decoder
     ComPtr<IWICBitmapDecoder> decoder;
-    hr = wic_factory->CreateDecoderFromFilename(filename, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
+    hr = r_d3d11_state->wic_factory->CreateDecoderFromFilename(filename, 
+															   nullptr, 
+															   GENERIC_READ, 
+															   WICDecodeMetadataCacheOnDemand, 
+															   &decoder);
 	if(FAILED(hr))
 		return;
 	
@@ -711,7 +736,7 @@ void R_D3D11_State::CreateWICTextureFromFile(const wchar_t *filename,
 	
     // nb: convert to RGBA
     ComPtr<IWICFormatConverter> converter;
-    hr = wic_factory->CreateFormatConverter(&converter);
+    hr = r_d3d11_state->wic_factory->CreateFormatConverter(&converter);
 	
     hr = converter->Initialize(frame.Get(),
 							   GUID_WICPixelFormat32bppRGBA,
@@ -725,7 +750,7 @@ void R_D3D11_State::CreateWICTextureFromFile(const wchar_t *filename,
 	
     UINT stride = width * 4; // 4 bytes per pixel (RGBA)
     UINT buffer_size = stride * height;
-	void *pixels = (void*)arena_push(&arena, buffer_size);
+	void *pixels = (void*)arena_push(arena, buffer_size);
 	
     hr = converter->CopyPixels(nullptr, stride, buffer_size, (BYTE*)pixels);
 	
@@ -749,16 +774,17 @@ void R_D3D11_State::CreateWICTextureFromFile(const wchar_t *filename,
 	}
     
     ComPtr<ID3D11Texture2D> texture;
-    hr = device->CreateTexture2D(&desc, &data, texture.GetAddressOf());
+    hr = r_d3d11_state->device->CreateTexture2D(&desc, &data, texture.GetAddressOf());
 	
     // nb: create the shader resource view
-    hr = device->CreateShaderResourceView(texture.Get(), nullptr, texture_view);
+    hr = r_d3d11_state->device->CreateShaderResourceView(texture.Get(), nullptr, texture_view);
 }
 
-void R_D3D11_State::CreateWICFactory()
+internal void
+r_create_wic_factory()
 {
 	HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory2, 
 								  NULL, 
 								  CLSCTX_INPROC_SERVER,
-								  IID_PPV_ARGS(&wic_factory));
+								  IID_PPV_ARGS(&r_d3d11_state->wic_factory));
 }

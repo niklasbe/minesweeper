@@ -11,7 +11,7 @@
 #include <intrin.h>
 #define ASSERT(cond) do{ if(!(cond)) __debugbreak(); } while(0)
 
-#define _DEBUG
+//#define _DEBUG
 
 #include <stdint.h>
 typedef int8_t      s8;
@@ -25,7 +25,8 @@ typedef uint64_t    u64;
 typedef float       f32;
 typedef double      f64; 
 
-#define internal static
+#define internal    static
+#define global      static
 
 #define Kilobytes(x) x*1024
 #define Megabytes(x) x*1024*1024
@@ -61,8 +62,6 @@ void arena_clear(Arena *arena)
 #include "renderer.cpp"
 #include "game.cpp"
 
-Game     *g_game;
-
 // NOTE(nb): message callback
 LRESULT CALLBACK WndProc(HWND hwnd,
 						 UINT message,
@@ -85,23 +84,23 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 			PostQuitMessage(0);
 		}else if(wParam == 'R')
 		{
-			game_reset(g_game);
+			game_reset();
 		}
 		break;
 		
 		case WM_LBUTTONDOWN:
-		game_on_mouse_down(g_game, MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_down(MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		break;
 		case WM_LBUTTONUP:
-		game_on_mouse_up(g_game, MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_up(MouseButton::LEFT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		break;
 		
 		case WM_RBUTTONDOWN:
-		game_on_mouse_down(g_game, MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_down(MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		
 		break;
 		case WM_RBUTTONUP:
-		game_on_mouse_up(g_game, MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		game_on_mouse_up(MouseButton::RIGHT_CLICK, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 		break;
 		
 		case WM_SIZE:
@@ -120,7 +119,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 		}
 		else if(!in_sizemove)
 		{
-			game_on_size_changed(g_game, LOWORD(lParam), HIWORD(lParam));
+			game_on_size_changed(LOWORD(lParam), HIWORD(lParam));
 		}
 		break;
 		
@@ -132,7 +131,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 		in_sizemove = 0;
 		RECT rc;
 		GetClientRect(hwnd, &rc);
-		game_on_size_changed(g_game, LOWORD(lParam), HIWORD(lParam));
+		game_on_size_changed(rc.right - rc.left, rc.bottom - rc.top);
 		break;
 		
 		case WM_POWERBROADCAST:
@@ -186,8 +185,6 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 	
 	////////////////////////////////
 	//- nb: Game Creation
-	Game game = {0};
-	g_game = &game;
 	{
 		//- nb Window class registration
 		WNDCLASSEX wc = {0};
@@ -214,8 +211,8 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 								   hInstance,
 								   NULL);
 		
-		game_init(&game);
-		game_set_window(&game, hwnd, 1280, 720);
+		game_init(&main_arena);
+		game_set_window(hwnd, 1280, 720);
 		// NOTE(nb): ShowWindow() issues a WM_SIZE event, which will create size dependant resources for us 
 		ShowWindow(hwnd, nCmdShow);
 	}
@@ -229,11 +226,11 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 			DispatchMessage(&msg);
 		}else
 		{
-			game_render(&game);
+			game_render();
 		}
 	}
 	
-	game_destroy(&game);
+	game_destroy();
 	VirtualFree(permanent_storage, 0, MEM_RELEASE);
 	CoUninitialize();
 	return 0;
