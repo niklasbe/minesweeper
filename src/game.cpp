@@ -2,18 +2,19 @@
 
 #include <time.h>
 
-internal void game_get_neighbors(u32 tile_x, u32 tile_y, u32 *neighbor_idx_list, u32 *neighbor_idx_list_count);
-internal void game_get_neighbors_by_idx(u32 idx, u32 *neighbor_idx_list, u32 *neighbor_idx_list_count);
-internal Tile *game_get_tile(u32 tile_x, u32 tile_y);
-internal Tile *game_get_tile_by_idx(u32 idx);
-internal u32  game_get_idx_by_screen_pos(u32 screen_x, u32 screen_y);
-internal Tile *game_get_tile_by_screen_pos(u32 screen_x, u32 screen_y);
-internal bool game_reveal_tile(u32 tile_x, u32 tile_y);
-internal bool game_reveal_tile_by_idx(u32 idx);
+
+//- nb: Static uv offsets for every tile in the sheet
+static const DirectX::XMFLOAT2 sprites[] =
+{
+	{0.0f, 0.0f},   {0.25f, 0.0f},   {0.50f, 0.0f},  {0.75f, 0.0f},
+	{0.0f, 0.25f},  {0.25f, 0.25f},  {0.50f, 0.25f}, {0.75f, 0.25f},
+	{0.0f, 0.50f},  {0.25f, 0.50f},  {0.50f, 0.50f}, {0.75f, 0.50f},
+	{0.0f, 0.75f},  {0.25f, 0.75f},  {0.50f, 0.75f}, {0.75f, 0.75f},
+};
 
 
 ////////////////////////////////
-//~ nb: Internal functions
+//~ nb: Helper functions
 internal void 
 game_get_neighbors_by_idx(u32 idx, u32 neighbor_idx_list[8], u32 *neighbor_idx_list_count)
 {
@@ -395,18 +396,21 @@ void
 game_render()
 {
 	arena_clear(&g_game->frame_arena);
-	const float color[4]{0.25f, 0.25f, 0.25f, 1.0f};
+	const f32 color[4]{0.25f, 0.25f, 0.25f, 1.0f};
 	r_clear(color);
 	
-	//- nb: submit board batch to GPU
+	//- nb: Draw tiles
 	InstanceData *instance_data = (InstanceData*)arena_push(&g_game->frame_arena, sizeof(InstanceData) * g_game->tiles_count);
 	for (int i = 0; i < g_game->tiles_count; i++)
 	{
-		int x = i % g_game->columns;
-		int y = i / g_game->columns;
+		u32 x = i % g_game->columns;
+		u32 y = i / g_game->columns;
 		
-		Tile &tile = g_game->tiles[i];
-		instance_data[i] = { {(float)x * TILE_SIZE,(float)y * TILE_SIZE}, tile.sprite, {TILE_SIZE, TILE_SIZE}};
+		Tile *tile = &g_game->tiles[i];
+		
+		// TODO(nb): dont hardcode the tilesheet uv sizes
+		DirectX::XMFLOAT4 iuv_rect = {tile->sprite.x, tile->sprite.y, 0.25, 0.25};
+		instance_data[i] = { {(float)x * TILE_SIZE,(float)y * TILE_SIZE}, {TILE_SIZE, TILE_SIZE}, iuv_rect};
 	}
 	
 	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_handle.U32[0]);

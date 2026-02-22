@@ -10,9 +10,9 @@
 typedef struct InstanceData InstanceData;
 struct InstanceData
 {
-	DirectX::XMFLOAT2 ipos; // instance pos
-    DirectX::XMFLOAT2 iuv;  // offset 
-    DirectX::XMFLOAT2 isize;// size
+	DirectX::XMFLOAT2 ipos;      // instance position in pixels
+    DirectX::XMFLOAT2 isize;     // size in pixels, scales the quad
+    DirectX::XMFLOAT4 iuv_rect;  // offset in normalized coordinates
 };
 
 typedef union R_Handle R_Handle;
@@ -21,6 +21,17 @@ union R_Handle
 	u64 U64[1];
 	u32 U32[2];
 	u16 U16[4];
+};
+
+typedef struct R_D3D11_Tex2D R_D3D11_Tex2D;
+struct R_D3D11_Tex2D
+{
+	R_D3D11_Tex2D             *next;
+	u64                        generation;
+	
+	ID3D11Texture2D           *texture;
+	ID3D11ShaderResourceView  *view;
+	DirectX::XMINT2            size;
 };
 
 ////////////////////////////////
@@ -99,7 +110,11 @@ void r_submit_batch(const InstanceData *data, u32 data_len, u32 texture_id);
 void r_clear(const float *color);
 void r_present();
 
+internal void r_create_wic_factory();
+internal void r_create_wic_texture_from_file(const wchar_t *filename, ID3D11ShaderResourceView **texture_view, Arena *arena);
+
 global R_D3D11_State *r_d3d11_state = {0};
+global R_D3D11_Tex2D r_d3d11_tex2d_nil = {&r_d3d11_tex2d_nil};
 
 
 #endif //RENDERER_H

@@ -17,13 +17,15 @@ const char hlsl[] =
 "                                                           \n"
 "struct VS_INPUT                                            \n"
 "{                                                          \n"
+"     // Per-vertex data                                    \n"
 "     float3 pos   : POS;                                   \n" 
 "     float3 uv    : TEX;                                   \n"
 "     float4 color : COL;                                   \n"
 "                                                           \n"
-"     float2 ipos  : IPOS;                                  \n"
-"     float2 iuv   : IUV;                                   \n"
-"     float2 isize : ISIZE;                                 \n"
+"     // Per-instance  data                                 \n"
+"     float2 ipos     : IPOS;                               \n"
+"     float2 isize    : ISIZE;                              \n"
+"     float4 iuv_rect : IUV_RECT;                           \n"
 "};                                                         \n"
 "                                                           \n"
 "struct PS_INPUT                                            \n"
@@ -33,13 +35,12 @@ const char hlsl[] =
 "    float4 color : COLOR;                                  \n"
 "};                                                         \n"
 "                                                           \n"
-"cbuffer Camera : register(b0)                              \n" 
+"cbuffer PerFrame : register(b0)                            \n" 
 "{                                                          \n"
 "    float4x4 projection;                                   \n"
 "}                                                          \n"
 "                                                           \n"
 "sampler sampler0 : register(s0);                           \n" 
-"                                                           \n"
 "Texture2D<float4> texture0 : register(t0);                 \n" 
 "                                                           \n"
 "PS_INPUT vs(VS_INPUT input)                                \n"
@@ -48,7 +49,11 @@ const char hlsl[] =
 "    float2 local_pos = input.pos.xy * input.isize;         \n"
 "    float2 world_pos = local_pos + input.ipos;             \n"
 "    output.pos = mul(projection, float4(world_pos, input.pos.z, 1.0f)); \n"
-"    output.uv = (input.uv.xy * 0.25f) + input.iuv.xy;            \n"
+"                                                           \n"
+"    // iuv_rect.xy = offset (x ,y)                         \n"
+"    // iuv_rect.zw = scale (w ,h)                          \n"
+"    output.uv = (input.uv.xy * input.iuv_rect.zw) + input.iuv_rect.xy;      \n"
+"                                                           \n"
 "    output.color = input.color;                            \n"
 "    return output;                                         \n"
 "}                                                          \n"
@@ -106,18 +111,6 @@ enum TileKind
 	TILE_END
 };
 
-
-internal void r_create_wic_factory();
-internal void r_create_wic_texture_from_file(const wchar_t *filename, ID3D11ShaderResourceView **texture_view, Arena *arena);
-
-//- nb: Static uv offsets for every tile in the sheet
-static const DirectX::XMFLOAT2 sprites[] =
-{
-	{0.0f, 0.0f},   {0.25f, 0.0f},   {0.50f, 0.0f},  {0.75f, 0.0f},
-	{0.0f, 0.25f},  {0.25f, 0.25f},  {0.50f, 0.25f}, {0.75f, 0.25f},
-	{0.0f, 0.50f},  {0.25f, 0.50f},  {0.50f, 0.50f}, {0.75f, 0.50f},
-	{0.0f, 0.75f},  {0.25f, 0.75f},  {0.50f, 0.75f}, {0.75f, 0.75f},
-};
 
 void 
 r_init(Arena *arena)
@@ -339,7 +332,8 @@ r_create_device_resources()
 				const char* error_msg = (const char*)vshad_source_errors->GetBufferPointer();
 				char buffer[256];
 				StringCchPrintfA(buffer, sizeof(buffer), "Vertex shader compilation failed: %s\n", error_msg);
-				MessageBoxA(0, "Vertex shader compilation failture", error_msg, MB_OK);
+				MessageBoxA(0,buffer, "Vertex shader compilation failture", MB_OK);
+				__debugbreak();
 			}
 			else
 			{
@@ -359,9 +353,9 @@ r_create_device_resources()
 				{ "TEX", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				{ "COL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				
-				{ "IPOS", 0, DXGI_FORMAT_R32G32_FLOAT,      1,                            0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{ "IUV",  0, DXGI_FORMAT_R32G32_FLOAT,      1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{ "ISIZE",0, DXGI_FORMAT_R32G32_FLOAT,      1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
+				{ "IPOS",    0, DXGI_FORMAT_R32G32_FLOAT,       1,                            0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+				{ "ISIZE",   0, DXGI_FORMAT_R32G32_FLOAT,       1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+				{ "IUV_RECT",0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
 			};
 			r_d3d11_state->device->CreateInputLayout(desc,
 													 ARRAYSIZE(desc),
@@ -398,7 +392,8 @@ r_create_device_resources()
 				const char* error_msg = (const char*)pshad_source_errors->GetBufferPointer();
 				char buffer[256];
 				StringCchPrintfA(buffer, sizeof(buffer), "Vertex shader compilation failed: %s\n", error_msg);
-				MessageBoxA(0, "Pixel shader compilation failture", error_msg, MB_OK);
+				MessageBoxA(0, buffer, "Pixel shader compilation failture", MB_OK);
+				__debugbreak();
 			}
 			else
 			{
@@ -793,11 +788,15 @@ r_create_wic_texture_from_file(const wchar_t *filename,
 		data.SysMemPitch = stride;
 	}
     
+    // nb: create the texture
     ID3D11Texture2D *texture;
     hr = r_d3d11_state->device->CreateTexture2D(&desc, &data, &texture);
-	
-    // nb: create the shader resource view
     hr = r_d3d11_state->device->CreateShaderResourceView(texture, nullptr, texture_view);
+	
+	texture->Release();
+	converter->Release();
+	frame->Release();
+	decoder->Release();
 }
 
 internal void

@@ -20,6 +20,7 @@ struct Tile
 	bool              has_flag       = false;
 	bool              is_mine        = false;
 	bool              is_swept       = false;
+	
 	DirectX::XMFLOAT2 sprite; // uv offset
 };
 
@@ -79,8 +80,18 @@ void game_gameover();
 void game_reset();
 void game_render();
 
-internal Tile game_tile_nil = {0};
+////////////////////////////////
+//~ nb: Helper functions
+internal void game_get_neighbors(u32 tile_x, u32 tile_y, u32 *neighbor_idx_list, u32 *neighbor_idx_list_count);
+internal void game_get_neighbors_by_idx(u32 idx, u32 *neighbor_idx_list, u32 *neighbor_idx_list_count);
+internal Tile *game_get_tile(u32 tile_x, u32 tile_y);
+internal Tile *game_get_tile_by_idx(u32 idx);
+internal u32  game_get_idx_by_screen_pos(u32 screen_x, u32 screen_y);
+internal Tile *game_get_tile_by_screen_pos(u32 screen_x, u32 screen_y);
+internal bool game_reveal_tile(u32 tile_x, u32 tile_y);
+internal bool game_reveal_tile_by_idx(u32 idx);
 
+global Tile game_tile_nil = {0};
 global Game *g_game = {0};;
 
 #endif //GAME_H
