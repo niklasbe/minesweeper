@@ -722,9 +722,6 @@ r_submit_batch(const InstanceData *instance_data, u32 length, u32 texture_id)
 												 0);            // start instance loc
 }
 
-// TODO(nb): Decide on this
-using Microsoft::WRL::ComPtr;
-
 R_Handle
 r_load_texture(const wchar_t *filename, Arena *arena)
 {
@@ -744,7 +741,7 @@ r_create_wic_texture_from_file(const wchar_t *filename,
 	// TODO(nb): error checking
 	HRESULT hr = S_OK;
     // nb: create decoder
-    ComPtr<IWICBitmapDecoder> decoder;
+    IWICBitmapDecoder *decoder;
     hr = r_d3d11_state->wic_factory->CreateDecoderFromFilename(filename, 
 															   nullptr, 
 															   GENERIC_READ, 
@@ -754,14 +751,14 @@ r_create_wic_texture_from_file(const wchar_t *filename,
 		return;
 	
     // nb: get the first frame
-    ComPtr<IWICBitmapFrameDecode> frame;
+	IWICBitmapFrameDecode *frame;
     hr = decoder->GetFrame(0, &frame);
 	
     // nb: convert to RGBA
-    ComPtr<IWICFormatConverter> converter;
+	IWICFormatConverter *converter;
     hr = r_d3d11_state->wic_factory->CreateFormatConverter(&converter);
 	
-    hr = converter->Initialize(frame.Get(),
+    hr = converter->Initialize(frame,
 							   GUID_WICPixelFormat32bppRGBA,
 							   WICBitmapDitherTypeNone,
 							   nullptr, 0.0f,
@@ -778,7 +775,7 @@ r_create_wic_texture_from_file(const wchar_t *filename,
     hr = converter->CopyPixels(nullptr, stride, buffer_size, (BYTE*)pixels);
 	
     // nb: create d3d11 texture
-    D3D11_TEXTURE2D_DESC desc = {};
+    D3D11_TEXTURE2D_DESC desc = {0};
 	{
 		desc.Width = width;
 		desc.Height = height;
@@ -790,17 +787,17 @@ r_create_wic_texture_from_file(const wchar_t *filename,
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 	}
     
-    D3D11_SUBRESOURCE_DATA data = {};
+    D3D11_SUBRESOURCE_DATA data = {0};
 	{
 		data.pSysMem = pixels;
 		data.SysMemPitch = stride;
 	}
     
-    ComPtr<ID3D11Texture2D> texture;
-    hr = r_d3d11_state->device->CreateTexture2D(&desc, &data, texture.GetAddressOf());
+    ID3D11Texture2D *texture;
+    hr = r_d3d11_state->device->CreateTexture2D(&desc, &data, &texture);
 	
     // nb: create the shader resource view
-    hr = r_d3d11_state->device->CreateShaderResourceView(texture.Get(), nullptr, texture_view);
+    hr = r_d3d11_state->device->CreateShaderResourceView(texture, nullptr, texture_view);
 }
 
 internal void
