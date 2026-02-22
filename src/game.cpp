@@ -2,14 +2,14 @@
 
 #include <time.h>
 
-
-
-internal void game_get_neighbors(u32, u32, u32 *, u32 *);
-internal void game_get_neighbors_by_idx(u32, u32 *, u32 *);
-internal Tile *game_get_tile(u32, u32);
-internal Tile *game_get_tile_by_idx(u32);
-internal bool game_reveal_tile(u32, u32);
-internal bool game_reveal_tile_by_idx(u32);
+internal void game_get_neighbors(u32 tile_x, u32 tile_y, u32 *neighbor_idx_list, u32 *neighbor_idx_list_count);
+internal void game_get_neighbors_by_idx(u32 idx, u32 *neighbor_idx_list, u32 *neighbor_idx_list_count);
+internal Tile *game_get_tile(u32 tile_x, u32 tile_y);
+internal Tile *game_get_tile_by_idx(u32 idx);
+internal u32  game_get_idx_by_screen_pos(u32 screen_x, u32 screen_y);
+internal Tile *game_get_tile_by_screen_pos(u32 screen_x, u32 screen_y);
+internal bool game_reveal_tile(u32 tile_x, u32 tile_y);
+internal bool game_reveal_tile_by_idx(u32 idx);
 
 
 ////////////////////////////////
@@ -58,7 +58,7 @@ game_get_neighbors(u32 tile_x, u32 tile_y, u32 neighbor_idx_list[8], u32 *neighb
 }
 
 internal Tile *
-game_grid_to_tile(u32 tile_x, u32 tile_y)
+game_get_tile(u32 tile_x, u32 tile_y)
 {
 	ASSERT(tile_x < g_game->columns && tile_y < g_game->rows);
 	u32 idx = tile_y * g_game->columns + tile_x;
@@ -72,6 +72,26 @@ game_get_tile_by_idx(u32 idx)
 	return &g_game->tiles[idx];
 }
 
+internal u32
+game_get_idx_by_screen_pos(u32 screen_x, u32 screen_y)
+{
+	u32 tile_x = screen_x / g_game->camera.zoom / TILE_SIZE;
+	u32 tile_y = screen_y / g_game->camera.zoom / TILE_SIZE;
+	u32 idx = tile_y * g_game->columns + tile_x;
+	return idx;
+}
+
+internal Tile *
+game_get_tile_by_screen_pos(u32 screen_x, u32 screen_y)
+{
+	u32 tile_x = screen_x / g_game->camera.zoom / TILE_SIZE;
+	u32 tile_y = screen_y / g_game->camera.zoom / TILE_SIZE;
+	u32 idx = tile_y * g_game->columns + tile_x;
+	if(tile_x >= g_game->columns || tile_y >= g_game->rows)
+		return &game_tile_nil;
+	return game_get_tile_by_idx(idx);
+}
+
 
 ////////////////////////////////
 //~ nb: Game functions
@@ -79,23 +99,27 @@ void
 game_init(Arena *arena)
 {
 	g_game = (Game*)arena_push(arena, sizeof(Game));
-	g_game->arena_main = arena;
+	g_game->arena = arena;
 	
 	//- nb: Arenas
-	void *scratch_ptr = (void*)arena_push(g_game->arena_main, Megabytes(4));
-	void *frame_ptr = (void*)arena_push(g_game->arena_main, Megabytes(4));
-	void *level_ptr = (void*)arena_push(g_game->arena_main, Megabytes(4));
-	arena_create(&g_game->arena_scratch, Megabytes(4), (char*)scratch_ptr);
-	arena_create(&g_game->arena_frame, Megabytes(4), (char*)frame_ptr);
-	arena_create(&g_game->arena_level, Megabytes(4), (char*)level_ptr);
+	void *scratch_ptr = (void*)arena_push(g_game->arena, Megabytes(4));
+	void *frame_ptr = (void*)arena_push(g_game->arena, Megabytes(4));
+	void *level_ptr = (void*)arena_push(g_game->arena, Megabytes(4));
+	arena_create(&g_game->scratch_arena, Megabytes(4), (char*)scratch_ptr);
+	arena_create(&g_game->frame_arena, Megabytes(4), (char*)frame_ptr);
+	arena_create(&g_game->level_arena, Megabytes(4), (char*)level_ptr);
 	////////////////////////////////
-	game_reset();
 	
-	r_init(g_game->arena_main);
+	game_reset();
+	r_init(g_game->arena);
+	
+	g_game->camera          = {0};
+	g_game->camera.zoom     = 1.0f;
+	g_game->camera.rotation = 1.0f;
 	
 	//- nb: Resources
-	g_game->spritesheet_id = r_load_texture(L"sheet.png", &g_game->arena_scratch);
-	g_game->floodfill_queue = (u32*)arena_push(&g_game->arena_level, g_game->tiles_count);
+	g_game->spritesheet_handle  = r_load_texture(L"sheet.png", &g_game->scratch_arena);
+	g_game->floodfill_queue = (u32*)arena_push(&g_game->level_arena, g_game->tiles_count);
 }
 
 void 
@@ -114,14 +138,7 @@ void
 game_on_mouse_down(MouseButton button, u32 x, u32 y)
 {
 	//- nb: Get tile index
-	int tile_x = x / 32;
-	int tile_y = y / 32;
-	int idx = tile_y * g_game->columns + tile_x;
-	
-	if(tile_x >= g_game->columns || tile_y >= g_game->rows)
-		return;
-	
-	Tile *tile = game_get_tile_by_idx(idx);
+	Tile *tile = game_get_tile_by_screen_pos(x, y);
 	
 	switch(button)
 	{
@@ -159,12 +176,7 @@ game_on_mouse_up(MouseButton button, u32 x, u32 y)
 	}
 	
 	//- nb: Get tile index
-	int tile_x = x / 32;
-	int tile_y = y / 32;
-	int idx = tile_y * g_game->columns + tile_x;
-	
-	if(tile_x >= g_game->columns || tile_y >= g_game->rows)
-		return;
+	u32 idx = game_get_idx_by_screen_pos(x, y);
 	
 	switch(button)
 	{
@@ -187,8 +199,8 @@ game_on_size_changed(u32 width, u32 height)
 void 
 game_reset()
 {
-	arena_clear(&g_game->arena_scratch);
-	arena_clear(&g_game->arena_level);
+	arena_clear(&g_game->scratch_arena);
+	arena_clear(&g_game->level_arena);
 	g_game->floodfill_queue_count = 0;
 	
 	////////////////////////////////
@@ -198,11 +210,11 @@ game_reset()
 	g_game->rows              = 16;
 	g_game->mine_count        = 90;
 	g_game->flag_count        = 0;
-	g_game->tiles = (Tile*)arena_push(&g_game->arena_level, sizeof(Tile) * g_game->rows * g_game->columns);
+	g_game->tiles = (Tile*)arena_push(&g_game->level_arena, sizeof(Tile) * g_game->rows * g_game->columns);
 	g_game->tiles_count = g_game->columns * g_game->rows;
 	
 	// nb: Index array for shuffling, used for mine selection
-	g_game->mine_indices = (u32*)arena_push(&g_game->arena_level, (sizeof(u32) * g_game->tiles_count));
+	g_game->mine_indices = (u32*)arena_push(&g_game->level_arena, (sizeof(u32) * g_game->tiles_count));
 	
 	// nb: Populate board
 	for(int i = 0; i < g_game->tiles_count; i++)
@@ -382,21 +394,21 @@ game_gameover()
 void 
 game_render()
 {
-	arena_clear(&g_game->arena_frame);
-	
+	arena_clear(&g_game->frame_arena);
 	const float color[4]{0.25f, 0.25f, 0.25f, 1.0f};
 	r_clear(color);
 	
 	//- nb: submit board batch to GPU
-	InstanceData *instance_data = (InstanceData*)arena_push(&g_game->arena_frame, sizeof(InstanceData) * g_game->tiles_count);
+	InstanceData *instance_data = (InstanceData*)arena_push(&g_game->frame_arena, sizeof(InstanceData) * g_game->tiles_count);
 	for (int i = 0; i < g_game->tiles_count; i++)
 	{
 		int x = i % g_game->columns;
 		int y = i / g_game->columns;
 		
 		Tile &tile = g_game->tiles[i];
-		instance_data[i] = { {(float)x,(float)y}, tile.sprite};
+		instance_data[i] = { {(float)x * TILE_SIZE,(float)y * TILE_SIZE}, tile.sprite, {TILE_SIZE, TILE_SIZE}};
 	}
-	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_id);
+	
+	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_handle.U32[0]);
 	r_present();
 }
