@@ -7,15 +7,25 @@
 
 ////////////////////////////////
 //~ nb: Per Instance Data
+typedef struct InstanceData InstanceData;
 struct InstanceData
 {
 	DirectX::XMFLOAT2 ipos; // instance pos
     DirectX::XMFLOAT2 iuv;  // offset 
+    DirectX::XMFLOAT2 isize;// size
 };
 
+typedef union R_Handle R_Handle;
+union R_Handle
+{
+	u64 U64[1];
+	u32 U32[2];
+	u16 U16[4];
+};
 
 ////////////////////////////////
 //~ nb: D3D11 Renderer
+typedef struct R_D3D11_State R_D3D11_State;
 struct R_D3D11_State
 {
 	//-
@@ -81,7 +91,9 @@ void r_set_window(void *window_handle, u32 width, u32 height);
 void r_window_size_changed(u32 width, u32 height);
 void r_handle_device_lost();
 
-u32 r_load_texture(const wchar_t *filename, Arena *arena);
+void r_set_transform(f32 x, f32 y, f32 scale_x, f32 scale_y);
+
+R_Handle r_load_texture(const wchar_t *filename, Arena *arena);
 
 void r_submit_batch(const InstanceData *data, u32 data_len, u32 texture_id);
 void r_clear(const float *color);

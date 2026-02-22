@@ -1,9 +1,14 @@
-#include "renderer.h"
+#include "render.h"
 #include <d3dcompiler.h>
 #include <strsafe.h>
 #include <wrl/client.h> 
 
 #include "game.h"
+
+
+#pragma comment(lib, "d3d11")
+#pragma comment(lib, "dxguid")
+#pragma comment(lib, "d3dcompiler")
 
 
 ////////////////////////////////
@@ -18,6 +23,7 @@ const char hlsl[] =
 "                                                           \n"
 "     float2 ipos  : IPOS;                                  \n"
 "     float2 iuv   : IUV;                                   \n"
+"     float2 isize : ISIZE;                                 \n"
 "};                                                         \n"
 "                                                           \n"
 "struct PS_INPUT                                            \n"
@@ -27,7 +33,7 @@ const char hlsl[] =
 "    float4 color : COLOR;                                  \n"
 "};                                                         \n"
 "                                                           \n"
-"cbuffer PerFrame : register(b0)                            \n" 
+"cbuffer Camera : register(b0)                              \n" 
 "{                                                          \n"
 "    float4x4 projection;                                   \n"
 "}                                                          \n"
@@ -39,9 +45,9 @@ const char hlsl[] =
 "PS_INPUT vs(VS_INPUT input)                                \n"
 "{                                                          \n"
 "    PS_INPUT output;                                       \n"
-"    float2 world_pos = input.pos.xy + input.ipos; \n"
+"    float2 local_pos = input.pos.xy * input.isize;         \n"
+"    float2 world_pos = local_pos + input.ipos;             \n"
 "    output.pos = mul(projection, float4(world_pos, input.pos.z, 1.0f)); \n"
-"    //output.pos = mul(float4(input.pos, 1.0f), uTransform); \n"
 "    output.uv = (input.uv.xy * 0.25f) + input.iuv.xy;            \n"
 "    output.color = input.color;                            \n"
 "    return output;                                         \n"
@@ -101,7 +107,6 @@ enum TileKind
 };
 
 
-internal void r_set_spritesheet(ID3D11ShaderResourceView *texture);
 internal void r_create_wic_factory();
 internal void r_create_wic_texture_from_file(const wchar_t *filename, ID3D11ShaderResourceView **texture_view, Arena *arena);
 
@@ -355,7 +360,8 @@ r_create_device_resources()
 				{ "COL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 				
 				{ "IPOS", 0, DXGI_FORMAT_R32G32_FLOAT,      1,                            0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{ "IUV",  0,DXGI_FORMAT_R32G32_FLOAT,       1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
+				{ "IUV",  0, DXGI_FORMAT_R32G32_FLOAT,      1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+				{ "ISIZE",0, DXGI_FORMAT_R32G32_FLOAT,      1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
 			};
 			r_d3d11_state->device->CreateInputLayout(desc,
 													 ARRAYSIZE(desc),
@@ -562,15 +568,18 @@ r_create_window_size_dependent_resources()
 	
 	////////////////////////////////
 	//- nb: Matrix updates
-	r_d3d11_state->projection = DirectX::XMMatrixOrthographicOffCenterLH(0.0f, 
-																		 (float)r_d3d11_state->width, 
-																		 (float)r_d3d11_state->height, 
+	r_d3d11_state->projection = DirectX::XMMatrixOrthographicOffCenterLH(0.0f,
+																		 (float)r_d3d11_state->width,
+																		 (float)r_d3d11_state->height,
 																		 0.0f, 
-																		 0.0f, 1.0f);
-	r_d3d11_state->scale = DirectX::XMMatrixScaling(32.0f, 32.0f, 1.0f);
+																		 0.0f, 
+																		 1.0f);
+	
+	/*r_d3d11_state->scale = DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f);
 	r_d3d11_state->translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
 	r_d3d11_state->world = r_d3d11_state->scale * r_d3d11_state->translation;
-	r_d3d11_state->final_transform = r_d3d11_state->world * r_d3d11_state->projection;
+	r_d3d11_state->final_transform = r_d3d11_state->world * r_d3d11_state->projection;*/
+	r_set_transform(0, 0, 1, 1);
 	////////////////////////////////
 	
 	
@@ -590,7 +599,9 @@ r_create_window_size_dependent_resources()
 	r_d3d11_state->context->PSSetShader(r_d3d11_state->pixel_shaders[0], NULL, 0);
 	r_d3d11_state->context->PSSetSamplers(0, 1, &r_d3d11_state->point_sampler);
 	r_d3d11_state->context->OMSetRenderTargets(1, &r_d3d11_state->framebuffer_rtv, NULL);
-}
+	
+	
+} 
 
 void
 r_set_window(void *window_handle, u32 width, u32 height)
@@ -644,19 +655,6 @@ r_clear(const float *color)
 void 
 r_present()
 {
-	//- nb: Constant Transform Buffer
-    {
-		TransformBuffer transform{r_d3d11_state->final_transform};
-		
-		D3D11_MAPPED_SUBRESOURCE mapped;
-		{
-			r_d3d11_state->context->Map(r_d3d11_state->constant_buffers[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-			CopyMemory(mapped.pData, &transform, sizeof(TransformBuffer));
-			r_d3d11_state->context->Unmap(r_d3d11_state->constant_buffers[0], 0);
-		}
-		r_d3d11_state->context->VSSetConstantBuffers(0, 1, &r_d3d11_state->constant_buffers[0]);
-	}
-	
 	HRESULT hr = r_d3d11_state->swapchain->Present(1, 0);
 	////////////////////////////////
 	
@@ -671,6 +669,29 @@ r_present()
 		// If the device was removed for any reason, a new device and swap chain will need to be created
 		r_handle_device_lost();
 	}
+}
+
+void 
+r_set_transform(f32 x, f32 y, f32 scale_x, f32 scale_y)
+{
+	r_d3d11_state->translation = DirectX::XMMatrixTranslation(x, y, 0.0f);
+	r_d3d11_state->scale       = DirectX::XMMatrixScaling(scale_x, scale_y, 1.0f);
+	r_d3d11_state->world = r_d3d11_state->scale * r_d3d11_state->translation;
+	r_d3d11_state->final_transform = r_d3d11_state->world * r_d3d11_state->projection;
+	
+	//- nb: Constant Transform Buffer
+    {
+		TransformBuffer transform{r_d3d11_state->final_transform};
+		
+		D3D11_MAPPED_SUBRESOURCE mapped;
+		{
+			r_d3d11_state->context->Map(r_d3d11_state->constant_buffers[0], 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+			CopyMemory(mapped.pData, &transform, sizeof(TransformBuffer));
+			r_d3d11_state->context->Unmap(r_d3d11_state->constant_buffers[0], 0);
+		}
+		r_d3d11_state->context->VSSetConstantBuffers(0, 1, &r_d3d11_state->constant_buffers[0]);
+	}
+	
 }
 
 void
@@ -704,12 +725,14 @@ r_submit_batch(const InstanceData *instance_data, u32 length, u32 texture_id)
 // TODO(nb): Decide on this
 using Microsoft::WRL::ComPtr;
 
-u32
+R_Handle
 r_load_texture(const wchar_t *filename, Arena *arena)
 {
+	R_Handle result = {0};
 	u32 id = r_d3d11_state->textures_count++;
 	r_create_wic_texture_from_file(filename, &r_d3d11_state->textures[id], arena);
-	return id;
+	result.U32[0] = id;
+	return result;
 }
 
 

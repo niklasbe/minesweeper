@@ -2,10 +2,7 @@
 #include <windows.h>
 #include <windowsx.h>
 
-#pragma comment(lib, "d3d11")
 #pragma comment(lib, "user32")
-#pragma comment(lib, "dxguid")
-#pragma comment(lib, "d3dcompiler")
 #pragma comment(lib, "ole32")
 
 #include <intrin.h>
@@ -59,7 +56,7 @@ void arena_clear(Arena *arena)
 }
 ////////////////////////////////
 
-#include "renderer.cpp"
+#include "render.cpp"
 #include "game.cpp"
 
 // NOTE(nb): message callback
