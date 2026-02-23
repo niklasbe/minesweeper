@@ -6,7 +6,6 @@
 // Left click to sweep, right click to plant a flag.
 // NOTE(nb): Left click should operate on BUTTONUP 
 // to avoid accidental sweeps.
-typedef enum MouseButton MouseButton;
 enum MouseButton
 {
 	LEFT_CLICK,
@@ -43,7 +42,6 @@ struct Game
 	Arena         *arena;
 	Arena         *scratch_arena;
 	Arena         *frame_arena;
-	Arena         *level_arena;
 	
 	
 	////////////////////////////////
@@ -90,6 +88,7 @@ internal Tile *game_get_tile(u32 tile_x, u32 tile_y);
 internal Tile *game_get_tile_by_idx(u32 idx);
 internal u32  game_get_idx_by_screen_pos(u32 screen_x, u32 screen_y);
 internal Tile *game_get_tile_by_screen_pos(u32 screen_x, u32 screen_y);
+
 internal bool game_reveal_tile(u32 tile_x, u32 tile_y);
 internal bool game_reveal_tile_by_idx(u32 idx);
 

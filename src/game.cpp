@@ -112,7 +112,6 @@ game_init()
 	g_game->arena = arena;
 	g_game->scratch_arena = arena_alloc();
 	g_game->frame_arena = arena_alloc();
-	g_game->level_arena = arena_alloc();
 	r_init();
 	
 	////////////////////////////////
@@ -124,7 +123,7 @@ game_init()
 	
 	//- nb: Resources
 	g_game->spritesheet_handle  = r_tex2d_load_file(L"sheet.png");
-	g_game->floodfill_queue = (u32*)arena_push(g_game->level_arena, g_game->tiles_count);
+	g_game->floodfill_queue = (u32*)arena_push(g_game->arena, g_game->tiles_count);
 }
 
 void 
@@ -135,7 +134,6 @@ game_destroy()
 	r_destroy();
 	arena_release(g_game->scratch_arena);
 	arena_release(g_game->frame_arena);
-	arena_release(g_game->level_arena);
 }
 
 void 
@@ -162,7 +160,6 @@ game_on_mouse_down(MouseButton button, u32 x, u32 y)
 			// nb: Don't allow a flag to be placed on a swept mine
 			if(tile->is_swept)
 				break;
-			
 			// nb: Place flag
 			if(!tile->has_flag)
 			{
@@ -187,13 +184,14 @@ game_on_mouse_up(MouseButton button, u32 x, u32 y)
 		game_reset();
 		return;
 	}
-	
+	// bounds check needed, ugly
+	Tile *tile = game_get_tile_by_screen_pos(x, y);
+	if(tile == &game_tile_nil)
+		return;
 	//- nb: Get tile index
 	u32 idx = game_get_idx_by_screen_pos(x, y);
-	
 	switch(button)
 	{
-		
 		case LEFT_CLICK:
 		{
 			if(game_reveal_tile_by_idx(idx))
@@ -246,7 +244,6 @@ void
 game_reset()
 {
 	arena_clear(g_game->scratch_arena);
-	arena_clear(g_game->level_arena);
 	g_game->floodfill_queue_count = 0;
 	
 	////////////////////////////////
@@ -258,11 +255,11 @@ game_reset()
 	g_game->swept_count       = 0;
 	g_game->flag_count        = 0;
 	g_game->first_sweep_protection_idx = 0;
-	g_game->tiles = (Tile*)arena_push(g_game->level_arena, sizeof(Tile) * g_game->rows * g_game->columns);
+	g_game->tiles = (Tile*)arena_push(g_game->arena, sizeof(Tile) * g_game->rows * g_game->columns);
 	g_game->tiles_count = g_game->columns * g_game->rows;
 	
 	// nb: Index array for shuffling, used for mine selection
-	g_game->mine_indices = (u32*)arena_push(g_game->level_arena, (sizeof(u32) * g_game->tiles_count));
+	g_game->mine_indices = (u32*)arena_push(g_game->arena, (sizeof(u32) * g_game->tiles_count));
 	
 	// nb: Populate board
 	for(int i = 0; i < g_game->tiles_count; i++)

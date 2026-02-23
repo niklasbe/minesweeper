@@ -58,6 +58,7 @@ temp_end(Temp temp)
 
 Arena *arena_alloc()
 {
+	// TODO(nb): get new pages, only reserve
 	void *ptr = VirtualAlloc(0, Megabytes(64), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	Arena *arena = (Arena*)ptr;
 	arena->base_ptr = ptr;
