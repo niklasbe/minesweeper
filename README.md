@@ -8,6 +8,7 @@ This project uses a handmade D3D11 renderer.
 ## Features:
 - [x] Chording
 - [x] Flood fill
+- [x] First sweep protection
 - [ ] Win condition
 
 ## Building:

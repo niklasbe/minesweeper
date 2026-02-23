@@ -52,6 +52,8 @@ struct Game
 	u32           *floodfill_queue;
 	u32           floodfill_queue_count = 0;
 	u32           *mine_indices;
+	// nb: if first sweep protection happened, store the idx of the mine 
+	u32           first_sweep_protection_idx;
 	
 	////////////////////////////////
 	// nb: Variables
@@ -59,6 +61,7 @@ struct Game
 	bool          is_playable;
 	f64           elapsed_time;
 	u32           mine_count;
+	u32           swept_count;
 	u32           flag_count;
 	u32           columns;
 	u32           rows;
@@ -71,8 +74,8 @@ void game_init(Arena *arena);
 void game_destroy();
 
 void game_set_window(void *window_handle, u32 width, u32 height);
-void game_mouse_up(u32 x, u32 y);
-void game_mouse_down(u32 x, u32 y);
+void game_on_mouse_up(u32 x, u32 y);
+void game_on_mouse_down(u32 x, u32 y);
 void game_size_changed(u32 w, u32 h);
 
 void game_gameover();

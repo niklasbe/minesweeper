@@ -10,6 +10,18 @@
 #pragma comment(lib, "dxguid")
 #pragma comment(lib, "d3dcompiler")
 
+////////////////////////////////
+//~ nb: Input layout elements
+D3D11_INPUT_ELEMENT_DESC r_d3d11_ilay_elements[] =
+{
+	{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,                            0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+	{ "TEX", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+	{ "COL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+	
+	{ "IPOS",    0, DXGI_FORMAT_R32G32_FLOAT,       1,                            0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+	{ "ISIZE",   0, DXGI_FORMAT_R32G32_FLOAT,       1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+	{ "IUV_RECT",0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
+};
 
 ////////////////////////////////
 //~ nb: Shader
@@ -65,7 +77,7 @@ const char hlsl[] =
 "}                                                          \n";
 
 ////////////////////////////////
-// nb: Helper macros
+//~ nb: Helper macros
 #define SAFE_RELEASE(COM) \
 do{\
 if(COM != NULL) {\
@@ -112,6 +124,7 @@ enum TileKind
 };
 
 
+//- nb: Render init
 void 
 r_init(Arena *arena)
 {
@@ -120,6 +133,7 @@ r_init(Arena *arena)
 	r_create_wic_factory();
 }
 
+//- nb: Render destroy
 void
 r_destroy()
 {
@@ -174,7 +188,6 @@ r_destroy()
 	
 	SAFE_RELEASE(r_d3d11_state->wic_factory);
 }
-
 
 void 
 r_create_device_resources()
@@ -346,23 +359,11 @@ r_create_device_resources()
 		
 		// nb: input layout
 		ID3D11InputLayout *ilay = 0;
-		{
-			D3D11_INPUT_ELEMENT_DESC desc[] =
-			{
-				{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,                            0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				{ "TEX", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				{ "COL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-				
-				{ "IPOS",    0, DXGI_FORMAT_R32G32_FLOAT,       1,                            0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{ "ISIZE",   0, DXGI_FORMAT_R32G32_FLOAT,       1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-				{ "IUV_RECT",0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
-			};
-			r_d3d11_state->device->CreateInputLayout(desc,
-													 ARRAYSIZE(desc),
-													 vshad_source_blob->GetBufferPointer(),
-													 vshad_source_blob->GetBufferSize(),
-													 &ilay);
-		}
+		r_d3d11_state->device->CreateInputLayout(r_d3d11_ilay_elements,
+												 ARRAYSIZE(r_d3d11_ilay_elements),
+												 vshad_source_blob->GetBufferPointer(),
+												 vshad_source_blob->GetBufferSize(),
+												 &ilay);
 		vshad_source_blob->Release();
 		
 		r_d3d11_state->vertex_shaders[0] = vshad;

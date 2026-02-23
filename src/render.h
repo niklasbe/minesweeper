@@ -15,6 +15,7 @@ struct InstanceData
     DirectX::XMFLOAT4 iuv_rect;  // offset in normalized coordinates
 };
 
+// TODO(nb): implement this
 typedef union R_Handle R_Handle;
 union R_Handle
 {

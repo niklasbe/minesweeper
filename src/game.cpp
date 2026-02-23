@@ -2,7 +2,15 @@
 
 #include <time.h>
 
+// TODO(nb): Don't generate mines until the player clicks.
+// Fixes the following concerns:
+// 1. No need to remove any mines
+// 2. No need to add a new mine to take its place
+// 3. Can guarantee that the first click is a flood fill, more satisfying
 
+
+
+// TODO(nb): better system for this? spritesheet system?
 //- nb: Static uv offsets for every tile in the sheet
 static const DirectX::XMFLOAT2 sprites[] =
 {
@@ -144,27 +152,31 @@ game_on_mouse_down(MouseButton button, u32 x, u32 y)
 	switch(button)
 	{
 		case LEFT_CLICK:
+		{
+			
+		}
 		break;
 		
 		case RIGHT_CLICK:
-		// nb: Don't allow a flag to be placed on a swept mine
-		if(tile->is_swept)
-			break;
-		
-		// nb: Place flag
-		if(!tile->has_flag)
 		{
-			tile->has_flag = true;
-			tile->sprite = sprites[TILE_FLAG];
-		}
-		else
-		{
-			tile->has_flag = false;
-			tile->sprite = sprites[TILE_DEFAULT];
+			// nb: Don't allow a flag to be placed on a swept mine
+			if(tile->is_swept)
+				break;
+			
+			// nb: Place flag
+			if(!tile->has_flag)
+			{
+				tile->has_flag = true;
+				tile->sprite = sprites[TILE_FLAG];
+			}
+			else
+			{
+				tile->has_flag = false;
+				tile->sprite = sprites[TILE_DEFAULT];
+			}
 		}
 		break;
 	}
-	
 }
 
 void 
@@ -181,12 +193,45 @@ game_on_mouse_up(MouseButton button, u32 x, u32 y)
 	
 	switch(button)
 	{
+		
 		case LEFT_CLICK:
-		if(game_reveal_tile_by_idx(idx))
-			game_gameover();
+		{
+			if(game_reveal_tile_by_idx(idx))
+			{
+				// nb: First sweep protection
+				if(g_game->swept_count == 0)
+				{
+					Tile *tile = game_get_tile_by_screen_pos(x, y);
+					// TODO(nb): add another mine from the already-generated list of mines
+					tile->is_mine = false;
+					g_game->first_sweep_protection_idx = idx;
+					// nb: Update neighbor count
+					u32 neighbor_count = 0;
+					u32 neighbor_idx_list[8];
+					u32 neighbor_idx_list_count;
+					game_get_neighbors_by_idx(idx, neighbor_idx_list, &neighbor_idx_list_count);
+					for(int i = 0; i < neighbor_idx_list_count; i++)
+					{
+						if(g_game->tiles[neighbor_idx_list[i]].is_mine)
+							neighbor_count += 1;
+						else
+							g_game->tiles[neighbor_idx_list[i]].neighbor_count -= 1;
+					}
+					tile->neighbor_count = neighbor_count;
+					game_reveal_tile_by_idx(idx);
+				}
+				else
+				{
+					game_gameover();
+				}
+			}
+		}
 		break;
-		////////////////////////////////
+		
 		case RIGHT_CLICK:
+		{
+			
+		}
 		break;
 	}
 }
@@ -210,7 +255,9 @@ game_reset()
 	g_game->columns           = 30;
 	g_game->rows              = 16;
 	g_game->mine_count        = 90;
+	g_game->swept_count       = 0;
 	g_game->flag_count        = 0;
+	g_game->first_sweep_protection_idx = 0;
 	g_game->tiles = (Tile*)arena_push(&g_game->level_arena, sizeof(Tile) * g_game->rows * g_game->columns);
 	g_game->tiles_count = g_game->columns * g_game->rows;
 	
@@ -245,7 +292,7 @@ game_reset()
 		int index = g_game->mine_indices[i];
 		Tile &tile = g_game->tiles[index];
 		tile.is_mine = true;
-		//tile.sprite = sprites[TILE_MINE];
+		tile.sprite = sprites[TILE_MINE];
 	}
 	
 	////////////////////////////////
@@ -289,6 +336,7 @@ game_reveal_tile_by_idx(u32 idx)
 	if(!tile.is_swept)
 	{
 		tile.is_swept = true;
+		g_game->swept_count += 1;
 		if(tile.neighbor_count == 0)
 		{
 			tile.sprite = sprites[TILE_EMPTY];
@@ -305,22 +353,23 @@ game_reveal_tile_by_idx(u32 idx)
 	{
 		//- nb: Chording logic
 		u32 flag_count = 0;
+		u32 mine_count = 0;
 		u32 neighbor_idx_list[8] = {0};
 		u32 neighbor_idx_list_count = 0;
 		game_get_neighbors_by_idx(idx, neighbor_idx_list, &neighbor_idx_list_count);
 		
-		// nb: Count the neighboring flags
+		// TODO(nb): Fix bug where chording can occur even if the flags were incorrectly placed.
 		for(int i = 0; i < neighbor_idx_list_count; i++)
 		{
 			if(g_game->tiles[neighbor_idx_list[i]].has_flag)
-				flag_count++;
+				flag_count += 1;
 		}
+		// nb: Allow chording if flags placed == neighbor count
 		if(flag_count == tile.neighbor_count)
 		{
 			for(int i = 0; i < neighbor_idx_list_count; i++)
 			{
 				Tile &nb = g_game->tiles[neighbor_idx_list[i]];
-				
 				if(!nb.is_swept && !nb.has_flag)
 				{
 					if (game_reveal_tile_by_idx(neighbor_idx_list[i]))
@@ -328,7 +377,6 @@ game_reveal_tile_by_idx(u32 idx)
 				}
 			}
 		}
-		
 	}
 	
 	////////////////////////////////
@@ -386,7 +434,8 @@ game_gameover()
 	// nb: Reveal all mines
 	for(int i = 0; i < g_game->mine_count; i++)
 	{
-		g_game->tiles[g_game->mine_indices[i]].sprite = sprites[TILE_MINE];
+		if(g_game->mine_indices[i] != g_game->first_sweep_protection_idx)
+			g_game->tiles[g_game->mine_indices[i]].sprite = sprites[TILE_MINE];
 	}
 	g_game->is_playable = false;
 };
