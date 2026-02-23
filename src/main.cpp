@@ -29,41 +29,69 @@ typedef double      f64;
 #define Megabytes(x) x*1024*1024
 
 ////////////////////////////////
-//- nb: Arena
+//~ nb: Arena
+typedef struct Arena Arena;
 struct Arena 
 {
-	char *base_ptr;
-	u32  size;
-	u32  offset;
+	void *base_ptr;
+	u64  size;
+	u64  offset;
 };
-void arena_create(Arena *arena, u32 size, char *base_ptr)
+typedef struct Temp Temp;
+struct Temp
 {
-	ASSERT(arena);
-	arena->base_ptr = base_ptr;
-	arena->size = size;
-	arena->offset = 0;
+	Arena *arena;
+	u64 pos;
+};
+
+Temp
+temp_begin(Arena *arena)
+{
+	u64 pos = arena->offset;
+	return {arena, pos};
 }
-void *arena_push(Arena *arena, u32 size)
+void
+temp_end(Temp temp)
 {
-	ASSERT((arena->offset + size) <= arena->size);
-	void *result = arena->base_ptr + arena->offset;
-	arena->offset += size;
+	temp.arena->offset = temp.pos;
+}
+
+Arena *arena_alloc()
+{
+	void *ptr = VirtualAlloc(0, Megabytes(64), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	Arena *arena = (Arena*)ptr;
+	arena->base_ptr = ptr;
+	arena->size = Megabytes(64);
+	arena->offset = (sizeof(Arena) + 7) & ~7;
+	return arena;
+}
+void arena_release(Arena *arena)
+{
+	VirtualFree(arena, 0, MEM_RELEASE);
+}
+void *arena_push(Arena *arena, u64 size)
+{
+	u64 aligned_size = (size + 7) & ~7;
+	ASSERT((arena->offset + aligned_size) <= arena->size);
+	void *result = (char*)arena->base_ptr + arena->offset;
+	arena->offset += aligned_size;
 	return result;
 }
 void arena_clear(Arena *arena)
 {
-	arena->offset = 0;
+	arena->offset = (sizeof(Arena) + 7) & ~7;
 }
 ////////////////////////////////
 
 #include "render.cpp"
 #include "game.cpp"
 
-// NOTE(nb): message callback
+////////////////////////////////
+//~ nb: Message callback
 LRESULT CALLBACK WndProc(HWND hwnd,
-						 UINT message,
-						 WPARAM wParam,
-						 LPARAM lParam)
+												 UINT message,
+												 WPARAM wParam,
+												 LPARAM lParam)
 {
 	static u8 in_sizemove = 0;
 	static u8 minimized = 0;
@@ -160,9 +188,9 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 ////////////////////////////////
 //~ nb: Entry Point
 int WINAPI wWinMain(HINSTANCE hInstance,
-					HINSTANCE hPrevInstance,
-					PWSTR pCmdLine,
-					int nCmdShow)
+										HINSTANCE hPrevInstance,
+										PWSTR pCmdLine,
+										int nCmdShow)
 {
 	CoInitializeEx(NULL, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
 	
@@ -170,15 +198,6 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 	UNREFERENCED_PARAMETER(pCmdLine);
 	
 	const char *class_name = "D3D11Project";
-	
-	char *permanent_storage = (char*)VirtualAlloc(0, Megabytes(16), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	ASSERT(permanent_storage);
-	
-	//- nb: Main Arena setup
-	Arena main_arena;
-	arena_create(&main_arena, Megabytes(16), permanent_storage);
-	
-	
 	
 	////////////////////////////////
 	//- nb: Game Creation
@@ -198,17 +217,17 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 		
 		//- nb: Window creation
 		HWND hwnd = CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP, // fix ugly resizing
-								   class_name,
-								   class_name,
-								   WS_OVERLAPPEDWINDOW, //^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
-								   CW_USEDEFAULT, CW_USEDEFAULT,
-								   1280, 720,
-								   NULL,
-								   NULL,
-								   hInstance,
-								   NULL);
+															 class_name,
+															 class_name,
+															 WS_OVERLAPPEDWINDOW, //^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
+															 CW_USEDEFAULT, CW_USEDEFAULT,
+															 1280, 720,
+															 NULL,
+															 NULL,
+															 hInstance,
+															 NULL);
 		
-		game_init(&main_arena);
+		game_init();
 		game_set_window(hwnd, 1280, 720);
 		// NOTE(nb): ShowWindow() issues a WM_SIZE event, which will create size dependant resources for us 
 		ShowWindow(hwnd, nCmdShow);
@@ -228,7 +247,6 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 	}
 	
 	game_destroy();
-	VirtualFree(permanent_storage, 0, MEM_RELEASE);
 	CoUninitialize();
 	return 0;
 }

@@ -41,9 +41,9 @@ struct Game
 	////////////////////////////////
 	// nb: Arenas
 	Arena         *arena;
-	Arena         scratch_arena;
-	Arena         frame_arena;
-	Arena         level_arena;
+	Arena         *scratch_arena;
+	Arena         *frame_arena;
+	Arena         *level_arena;
 	
 	
 	////////////////////////////////
@@ -69,7 +69,7 @@ struct Game
 };
 
 
-void game_init(Arena *arena);
+void game_init();
 void game_destroy();
 
 void game_set_window(void *window_handle, u32 width, u32 height);

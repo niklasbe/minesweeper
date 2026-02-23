@@ -94,12 +94,13 @@ typedef struct
 } TransformBuffer;
 
 //- nb: Vertex structure
-typedef struct
+typedef struct Vertex Vertex;
+struct Vertex
 {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT3 tex;
 	DirectX::XMFLOAT4 color; 
-} Vertex;
+};
 
 //- nb: A map of the spritesheet tiles
 enum TileKind
@@ -126,9 +127,11 @@ enum TileKind
 
 //- nb: Render init
 void 
-r_init(Arena *arena)
+r_init()
 {
+	Arena *arena = arena_alloc();
 	r_d3d11_state = (R_D3D11_State*)arena_push(arena, sizeof(R_D3D11_State));
+	r_d3d11_state->arena = arena;
 	r_create_device_resources();
 	r_create_wic_factory();
 }
@@ -143,9 +146,6 @@ r_destroy()
 		r_d3d11_state->context->ClearState();
 		r_d3d11_state->context->Flush();
 	}
-	
-	for(int i = 0; i < r_d3d11_state->textures_count; i++)
-		SAFE_RELEASE(r_d3d11_state->textures[i]);
 	
 	SAFE_RELEASE(r_d3d11_state->framebuffer_rtv);
 	SAFE_RELEASE(r_d3d11_state->framebuffer);
@@ -187,6 +187,8 @@ r_destroy()
 	SAFE_RELEASE(r_d3d11_state->base_device);
 	
 	SAFE_RELEASE(r_d3d11_state->wic_factory);
+	
+	arena_release(r_d3d11_state->arena);
 }
 
 void 
@@ -203,12 +205,12 @@ r_create_device_resources()
 	D3D_FEATURE_LEVEL feature_levels[] = {D3D_FEATURE_LEVEL_11_0};
 	D3D_DRIVER_TYPE driver_type = D3D_DRIVER_TYPE_HARDWARE;
 	HRESULT hr  = D3D11CreateDevice(0,
-									driver_type,
-									0,
-									creation_flags,
-									feature_levels, ARRAYSIZE(feature_levels),
-									D3D11_SDK_VERSION,
-									&r_d3d11_state->base_device, 0, &r_d3d11_state->base_context);
+																	driver_type,
+																	0,
+																	creation_flags,
+																	feature_levels, ARRAYSIZE(feature_levels),
+																	D3D11_SDK_VERSION,
+																	&r_d3d11_state->base_device, 0, &r_d3d11_state->base_context);
 #ifdef _DEBUG
 	// nb: enable debug break-on-error
 	ID3D11InfoQueue *info = 0;
@@ -329,16 +331,16 @@ r_create_device_resources()
 		ID3D11VertexShader *vshad = 0;
 		{
 			hr = D3DCompile(hlsl, 
-							sizeof(hlsl),
-							0,
-							0,
-							0,
-							"vs",
-							"vs_5_0",
-							0,
-							0,
-							&vshad_source_blob,
-							&vshad_source_errors);
+											sizeof(hlsl),
+											0,
+											0,
+											0,
+											"vs",
+											"vs_5_0",
+											0,
+											0,
+											&vshad_source_blob,
+											&vshad_source_errors);
 			if(FAILED(hr))
 			{
 				// error printing
@@ -351,19 +353,19 @@ r_create_device_resources()
 			else
 			{
 				r_d3d11_state->device->CreateVertexShader(vshad_source_blob->GetBufferPointer(),
-														  vshad_source_blob->GetBufferSize(),
-														  0,
-														  &vshad);
+																									vshad_source_blob->GetBufferSize(),
+																									0,
+																									&vshad);
 			}
 		}
 		
 		// nb: input layout
 		ID3D11InputLayout *ilay = 0;
 		r_d3d11_state->device->CreateInputLayout(r_d3d11_ilay_elements,
-												 ARRAYSIZE(r_d3d11_ilay_elements),
-												 vshad_source_blob->GetBufferPointer(),
-												 vshad_source_blob->GetBufferSize(),
-												 &ilay);
+																						 ARRAYSIZE(r_d3d11_ilay_elements),
+																						 vshad_source_blob->GetBufferPointer(),
+																						 vshad_source_blob->GetBufferSize(),
+																						 &ilay);
 		vshad_source_blob->Release();
 		
 		r_d3d11_state->vertex_shaders[0] = vshad;
@@ -377,16 +379,16 @@ r_create_device_resources()
 		ID3D11PixelShader *pshad = 0;
 		{
 			hr = D3DCompile(hlsl, 
-							sizeof(hlsl),
-							0,
-							0,
-							0,
-							"ps",
-							"ps_5_0",
-							0,
-							0,
-							&pshad_source_blob,
-							&pshad_source_errors);
+											sizeof(hlsl),
+											0,
+											0,
+											0,
+											"ps",
+											"ps_5_0",
+											0,
+											0,
+											&pshad_source_blob,
+											&pshad_source_errors);
 			if(FAILED(hr))
 			{
 				// error printing
@@ -399,9 +401,9 @@ r_create_device_resources()
 			else
 			{
 				r_d3d11_state->device->CreatePixelShader(pshad_source_blob->GetBufferPointer(),
-														 pshad_source_blob->GetBufferSize(),
-														 0,
-														 &pshad);
+																								 pshad_source_blob->GetBufferSize(),
+																								 0,
+																								 &pshad);
 			}
 			
 			pshad_source_blob->Release();
@@ -503,18 +505,18 @@ r_create_window_size_dependent_resources()
 	if(r_d3d11_state->swapchain)
 	{
 		HRESULT hr = r_d3d11_state->swapchain->ResizeBuffers(0, //preserve buffer count
-															 r_d3d11_state->width, 
-															 r_d3d11_state->height,
-															 DXGI_FORMAT_UNKNOWN,
-															 DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+																												 r_d3d11_state->width, 
+																												 r_d3d11_state->height,
+																												 DXGI_FORMAT_UNKNOWN,
+																												 DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
 		// if device gets lost somehow (driver crash?)
 		if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
 		{
 #ifdef _DEBUG
 			char buff[64];
 			u32 reason = (hr == DXGI_ERROR_DEVICE_REMOVED) ? r_d3d11_state->device->GetDeviceRemovedReason() : hr;
-            sprintf_s(buff, sizeof(buff), "Device Lost on ResizeBuffers: Reason code 0x%08X\n", reason);
-            OutputDebugString(buff);
+			sprintf_s(buff, sizeof(buff), "Device Lost on ResizeBuffers: Reason code 0x%08X\n", reason);
+			OutputDebugString(buff);
 #endif
 			// If the device was removed for any reason, a new device and swap chain will need to be created
 			r_handle_device_lost();
@@ -544,11 +546,11 @@ r_create_window_size_dependent_resources()
 			swapchain_desc.Flags              = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 		}
 		HRESULT hr = r_d3d11_state->dxgi_factory->CreateSwapChainForHwnd((IUnknown *)r_d3d11_state->device,
-																		 r_d3d11_state->hwnd,
-																		 &swapchain_desc,
-																		 0, // no fullscreen descriptor
-																		 0, 
-																		 &r_d3d11_state->swapchain);
+																																		 r_d3d11_state->hwnd,
+																																		 &swapchain_desc,
+																																		 0, // no fullscreen descriptor
+																																		 0, 
+																																		 &r_d3d11_state->swapchain);
 		ASSERT(SUCCEEDED(hr)); 
 		
 		// This program does not support exclusive fullscreen, has no fullscreen descriptor. Prevent DXGI from responding to ALT+ENTER keybind
@@ -565,11 +567,11 @@ r_create_window_size_dependent_resources()
 	////////////////////////////////
 	//- nb: Matrix updates
 	r_d3d11_state->projection = DirectX::XMMatrixOrthographicOffCenterLH(0.0f,
-																		 (float)r_d3d11_state->width,
-																		 (float)r_d3d11_state->height,
-																		 0.0f, 
-																		 0.0f, 
-																		 1.0f);
+																																			 (float)r_d3d11_state->width,
+																																			 (float)r_d3d11_state->height,
+																																			 0.0f, 
+																																			 0.0f, 
+																																			 1.0f);
 	
 	/*r_d3d11_state->scale = DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f);
 	r_d3d11_state->translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
@@ -655,7 +657,7 @@ r_present()
 	////////////////////////////////
 	
 	if(hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-    {
+	{
 #ifdef _DEBUG
 		char buff[64];
 		u32 reason = (hr == DXGI_ERROR_DEVICE_REMOVED) ? r_d3d11_state->device->GetDeviceRemovedReason() : hr;
@@ -676,7 +678,7 @@ r_set_transform(f32 x, f32 y, f32 scale_x, f32 scale_y)
 	r_d3d11_state->final_transform = r_d3d11_state->world * r_d3d11_state->projection;
 	
 	//- nb: Constant Transform Buffer
-    {
+	{
 		TransformBuffer transform{r_d3d11_state->final_transform};
 		
 		D3D11_MAPPED_SUBRESOURCE mapped;
@@ -691,7 +693,7 @@ r_set_transform(f32 x, f32 y, f32 scale_x, f32 scale_y)
 }
 
 void
-r_submit_batch(const InstanceData *instance_data, u32 length, u32 texture_id)
+r_submit_batch(const InstanceData *instance_data, u32 length, R_Handle texture)
 {
 	//- nb: Fill instance buffer
 	D3D11_MAPPED_SUBRESOURCE mapped;
@@ -710,101 +712,159 @@ r_submit_batch(const InstanceData *instance_data, u32 length, u32 texture_id)
 	}
 	
 	
-	r_d3d11_state->context->PSSetShaderResources(0, 1, &r_d3d11_state->textures[texture_id]);
+	R_D3D11_Tex2D *tex2d = r_d3d11_tex2d_from_handle(texture);
+	r_d3d11_state->context->PSSetShaderResources(0, 1, &tex2d->view);
 	r_d3d11_state->context->DrawIndexedInstanced(6,             // indices,
-												 length,        // num
-												 0,             // start index loc
-												 0,             // base vertex loc
-												 0);            // start instance loc
+																							 length,        // num
+																							 0,             // start index loc
+																							 0,             // base vertex loc
+																							 0);            // start instance loc
+}
+
+// TODO(nb): ?
+R_Handle
+r_tex2d_load_file(const wchar_t *filename)
+{
+	return r_create_tex2d_from_file(filename);
 }
 
 R_Handle
-r_load_texture(const wchar_t *filename, Arena *arena)
+r_tex2d_alloc(DirectX::XMUINT2 size, void *data)
 {
-	R_Handle result = {0};
-	u32 id = r_d3d11_state->textures_count++;
-	r_create_wic_texture_from_file(filename, &r_d3d11_state->textures[id], arena);
-	result.U32[0] = id;
-	return result;
+	R_D3D11_Tex2D *texture;
+	// nb: See if there is a free texture
+	texture = r_d3d11_state->first_free_tex2d;
+	if(!texture)
+	{
+		texture = (R_D3D11_Tex2D*)arena_push(r_d3d11_state->arena, sizeof(R_D3D11_Tex2D));
+	}
+	else
+	{
+		u64 gen = texture->generation;
+		r_d3d11_state->first_free_tex2d = r_d3d11_state->first_free_tex2d->next;
+		memset(texture, 0, sizeof(R_D3D11_Tex2D));
+		texture->generation = gen;
+	}
+	texture->generation += 1;
+	
+	D3D11_SUBRESOURCE_DATA initial_data_ = {0};
+  D3D11_SUBRESOURCE_DATA *initial_data = 0;
+  if(data != 0)
+  {
+    initial_data = &initial_data_;
+    initial_data->pSysMem = data;
+    initial_data->SysMemPitch = size.x * 4;
+		// TODO(nb): more formats?
+    //initial_data->SysMemPitch = r_tex2d_format_bytes_per_pixel_table[format] * size.x;
+  }
+  
+  //- nb: create texture
+  D3D11_TEXTURE2D_DESC texture_desc = {0};
+  {
+    texture_desc.Width              = size.x;
+    texture_desc.Height             = size.y;
+    texture_desc.MipLevels          = 1;
+    texture_desc.ArraySize          = 1;
+    texture_desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texture_desc.SampleDesc.Count   = 1;
+    texture_desc.Usage              = D3D11_USAGE_DEFAULT;
+    texture_desc.BindFlags          = D3D11_BIND_SHADER_RESOURCE;
+  }
+	
+  r_d3d11_state->device->CreateTexture2D(&texture_desc, initial_data, &texture->texture);
+  r_d3d11_state->device->CreateShaderResourceView((ID3D11Resource *)texture->texture, 0, &texture->view);
+  
+	// TODO(nb): add more info: format, resource kind etc
+	texture->size = size;
+	
+	R_Handle handle = r_d3d11_handle_from_tex2d(texture);
+	return handle;
 }
 
+void r_tex2d_release(R_Handle handle)
+{
+	R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
+	if(texture != &r_d3d11_tex2d_nil)
+	{
+		// nb: Add to list of free textures
+		texture->next = r_d3d11_state->first_free_tex2d;
+		r_d3d11_state->first_free_tex2d = texture;
+	}
+	SAFE_RELEASE(texture->texture);
+	SAFE_RELEASE(texture->view);
+}
 
-internal void
-r_create_wic_texture_from_file(const wchar_t *filename, 
-							   ID3D11ShaderResourceView **texture_view,
-							   Arena *arena)
+internal R_D3D11_Tex2D *
+r_d3d11_tex2d_from_handle(R_Handle handle)
+{
+	R_D3D11_Tex2D *texture = (R_D3D11_Tex2D *)handle.U64[0];
+	if(!texture)
+		texture = &r_d3d11_tex2d_nil;
+	return texture;
+}
+
+internal R_Handle
+r_d3d11_handle_from_tex2d(R_D3D11_Tex2D *texture)
+{
+	R_Handle handle = {0};
+	handle.U64[0] = (u64)texture;
+	return handle;
+}
+
+internal R_Handle
+r_create_tex2d_from_file(const wchar_t *filename)
 {
 	// TODO(nb): error checking
 	HRESULT hr = S_OK;
-    // nb: create decoder
-    IWICBitmapDecoder *decoder;
-    hr = r_d3d11_state->wic_factory->CreateDecoderFromFilename(filename, 
-															   nullptr, 
-															   GENERIC_READ, 
-															   WICDecodeMetadataCacheOnDemand, 
-															   &decoder);
+	// nb: create decoder
+	IWICBitmapDecoder *decoder;
+	hr = r_d3d11_state->wic_factory->CreateDecoderFromFilename(filename, 
+																														 nullptr, 
+																														 GENERIC_READ, 
+																														 WICDecodeMetadataCacheOnDemand, 
+																														 &decoder);
 	if(FAILED(hr))
-		return;
+		return r_d3d11_handle_from_tex2d(&r_d3d11_tex2d_nil);
 	
-    // nb: get the first frame
+	
+	// nb: get the first frame
 	IWICBitmapFrameDecode *frame;
-    hr = decoder->GetFrame(0, &frame);
+	hr = decoder->GetFrame(0, &frame);
 	
-    // nb: convert to RGBA
+	// nb: convert to RGBA
 	IWICFormatConverter *converter;
-    hr = r_d3d11_state->wic_factory->CreateFormatConverter(&converter);
+	hr = r_d3d11_state->wic_factory->CreateFormatConverter(&converter);
 	
-    hr = converter->Initialize(frame,
-							   GUID_WICPixelFormat32bppRGBA,
-							   WICBitmapDitherTypeNone,
-							   nullptr, 0.0f,
-							   WICBitmapPaletteTypeCustom);
+	hr = converter->Initialize(frame,
+														 GUID_WICPixelFormat32bppRGBA,
+														 WICBitmapDitherTypeNone,
+														 nullptr, 0.0f,
+														 WICBitmapPaletteTypeCustom);
 	
-    // nb: copy pixels to buffer
-    UINT width, height;
-    hr = converter->GetSize(&width, &height);
+	// nb: copy pixels to buffer
+	UINT width, height;
+	hr = converter->GetSize(&width, &height);
 	
-    UINT stride = width * 4; // 4 bytes per pixel (RGBA)
-    UINT buffer_size = stride * height;
-	void *pixels = (void*)arena_push(arena, buffer_size);
+	UINT stride = width * 4; // 4 bytes per pixel (RGBA)
+	UINT buffer_size = stride * height;
+	Temp temp = temp_begin(r_d3d11_state->arena);
+	void *pixels = (void*)arena_push(r_d3d11_state->arena, buffer_size);
+	hr = converter->CopyPixels(nullptr, stride, buffer_size, (BYTE*)pixels);
 	
-    hr = converter->CopyPixels(nullptr, stride, buffer_size, (BYTE*)pixels);
+	R_Handle handle = r_tex2d_alloc({width, height}, pixels);
 	
-    // nb: create d3d11 texture
-    D3D11_TEXTURE2D_DESC desc = {0};
-	{
-		desc.Width = width;
-		desc.Height = height;
-		desc.MipLevels = 1;
-		desc.ArraySize = 1;
-		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		desc.SampleDesc.Count = 1;
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	}
-    
-    D3D11_SUBRESOURCE_DATA data = {0};
-	{
-		data.pSysMem = pixels;
-		data.SysMemPitch = stride;
-	}
-    
-    // nb: create the texture
-    ID3D11Texture2D *texture;
-    hr = r_d3d11_state->device->CreateTexture2D(&desc, &data, &texture);
-    hr = r_d3d11_state->device->CreateShaderResourceView(texture, nullptr, texture_view);
-	
-	texture->Release();
 	converter->Release();
 	frame->Release();
 	decoder->Release();
+	temp_end(temp);
+	return handle;
 }
 
 internal void
 r_create_wic_factory()
 {
 	HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory2, 
-								  NULL, 
-								  CLSCTX_INPROC_SERVER,
-								  IID_PPV_ARGS(&r_d3d11_state->wic_factory));
+																NULL, 
+																CLSCTX_INPROC_SERVER,
+																IID_PPV_ARGS(&r_d3d11_state->wic_factory));
 }

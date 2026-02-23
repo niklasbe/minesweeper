@@ -105,35 +105,37 @@ game_get_tile_by_screen_pos(u32 screen_x, u32 screen_y)
 ////////////////////////////////
 //~ nb: Game functions
 void 
-game_init(Arena *arena)
+game_init()
 {
+	Arena *arena = arena_alloc();
 	g_game = (Game*)arena_push(arena, sizeof(Game));
 	g_game->arena = arena;
+	g_game->scratch_arena = arena_alloc();
+	g_game->frame_arena = arena_alloc();
+	g_game->level_arena = arena_alloc();
+	r_init();
 	
-	//- nb: Arenas
-	void *scratch_ptr = (void*)arena_push(g_game->arena, Megabytes(4));
-	void *frame_ptr = (void*)arena_push(g_game->arena, Megabytes(4));
-	void *level_ptr = (void*)arena_push(g_game->arena, Megabytes(4));
-	arena_create(&g_game->scratch_arena, Megabytes(4), (char*)scratch_ptr);
-	arena_create(&g_game->frame_arena, Megabytes(4), (char*)frame_ptr);
-	arena_create(&g_game->level_arena, Megabytes(4), (char*)level_ptr);
 	////////////////////////////////
-	
 	game_reset();
-	r_init(g_game->arena);
+	
 	
 	g_game->camera          = {0};
 	g_game->camera.zoom     = 1.0f;
 	
 	//- nb: Resources
-	g_game->spritesheet_handle  = r_load_texture(L"sheet.png", &g_game->scratch_arena);
-	g_game->floodfill_queue = (u32*)arena_push(&g_game->level_arena, g_game->tiles_count);
+	g_game->spritesheet_handle  = r_tex2d_load_file(L"sheet.png");
+	g_game->floodfill_queue = (u32*)arena_push(g_game->level_arena, g_game->tiles_count);
 }
 
 void 
 game_destroy()
 {
+	r_tex2d_release(g_game->spritesheet_handle);
+	
 	r_destroy();
+	arena_release(g_game->scratch_arena);
+	arena_release(g_game->frame_arena);
+	arena_release(g_game->level_arena);
 }
 
 void 
@@ -152,7 +154,6 @@ game_on_mouse_down(MouseButton button, u32 x, u32 y)
 	{
 		case LEFT_CLICK:
 		{
-			
 		}
 		break;
 		
@@ -244,8 +245,8 @@ game_on_size_changed(u32 width, u32 height)
 void 
 game_reset()
 {
-	arena_clear(&g_game->scratch_arena);
-	arena_clear(&g_game->level_arena);
+	arena_clear(g_game->scratch_arena);
+	arena_clear(g_game->level_arena);
 	g_game->floodfill_queue_count = 0;
 	
 	////////////////////////////////
@@ -257,11 +258,11 @@ game_reset()
 	g_game->swept_count       = 0;
 	g_game->flag_count        = 0;
 	g_game->first_sweep_protection_idx = 0;
-	g_game->tiles = (Tile*)arena_push(&g_game->level_arena, sizeof(Tile) * g_game->rows * g_game->columns);
+	g_game->tiles = (Tile*)arena_push(g_game->level_arena, sizeof(Tile) * g_game->rows * g_game->columns);
 	g_game->tiles_count = g_game->columns * g_game->rows;
 	
 	// nb: Index array for shuffling, used for mine selection
-	g_game->mine_indices = (u32*)arena_push(&g_game->level_arena, (sizeof(u32) * g_game->tiles_count));
+	g_game->mine_indices = (u32*)arena_push(g_game->level_arena, (sizeof(u32) * g_game->tiles_count));
 	
 	// nb: Populate board
 	for(int i = 0; i < g_game->tiles_count; i++)
@@ -443,12 +444,12 @@ game_gameover()
 void 
 game_render()
 {
-	arena_clear(&g_game->frame_arena);
+	arena_clear(g_game->frame_arena);
 	const f32 color[4]{0.25f, 0.25f, 0.25f, 1.0f};
 	r_clear(color);
 	
 	//- nb: Draw tiles
-	InstanceData *instance_data = (InstanceData*)arena_push(&g_game->frame_arena, sizeof(InstanceData) * g_game->tiles_count);
+	InstanceData *instance_data = (InstanceData*)arena_push(g_game->frame_arena, sizeof(InstanceData) * g_game->tiles_count);
 	for (int i = 0; i < g_game->tiles_count; i++)
 	{
 		u32 x = i % g_game->columns;
@@ -461,6 +462,6 @@ game_render()
 		instance_data[i] = { {(float)x * TILE_SIZE,(float)y * TILE_SIZE}, {TILE_SIZE, TILE_SIZE}, iuv_rect};
 	}
 	
-	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_handle.U32[0]);
+	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_handle);
 	r_present();
 }

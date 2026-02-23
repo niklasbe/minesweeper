@@ -11,8 +11,8 @@ typedef struct InstanceData InstanceData;
 struct InstanceData
 {
 	DirectX::XMFLOAT2 ipos;      // instance position in pixels
-    DirectX::XMFLOAT2 isize;     // size in pixels, scales the quad
-    DirectX::XMFLOAT4 iuv_rect;  // offset in normalized coordinates
+	DirectX::XMFLOAT2 isize;     // size in pixels, scales the quad
+	DirectX::XMFLOAT4 iuv_rect;  // offset in normalized coordinates
 };
 
 // TODO(nb): implement this
@@ -32,7 +32,7 @@ struct R_D3D11_Tex2D
 	
 	ID3D11Texture2D           *texture;
 	ID3D11ShaderResourceView  *view;
-	DirectX::XMINT2            size;
+	DirectX::XMUINT2           size;
 };
 
 ////////////////////////////////
@@ -40,21 +40,21 @@ struct R_D3D11_Tex2D
 typedef struct R_D3D11_State R_D3D11_State;
 struct R_D3D11_State
 {
+	// TODO(nb): local scratch arena?
+	Arena                    *arena;
 	//-
 	// TODO(nb): reset on device lost
-	ID3D11ShaderResourceView *m_spritesheet;
-	Arena                    *m_arena;
-	Arena                    *m_scratch_arena;
+	R_D3D11_Tex2D            *first_free_tex2d;
 	
 	////////////////////////////////
 	//- nb: Main Window
-	HWND                    hwnd;
-    IDXGISwapChain1         *swapchain;
-    ID3D11Texture2D         *framebuffer;
-    ID3D11RenderTargetView  *framebuffer_rtv;
-    u32                     width;
-    u32                     height;
-    D3D11_VIEWPORT          viewport;
+	HWND                   hwnd;
+	IDXGISwapChain1         *swapchain;
+	ID3D11Texture2D         *framebuffer;
+	ID3D11RenderTargetView  *framebuffer_rtv;
+	u32                     width;
+	u32                     height;
+	D3D11_VIEWPORT          viewport;
 	////////////////////////////////
 	DirectX::XMMATRIX       projection;
 	DirectX::XMMATRIX       translation;
@@ -62,36 +62,34 @@ struct R_D3D11_State
 	DirectX::XMMATRIX       world;
 	DirectX::XMMATRIX       final_transform;
 	////////////////////////////////
-    //- nb: D3D11 context
+	//- nb: D3D11 context
 	ID3D11Device            *base_device;
-    ID3D11DeviceContext     *base_context;
-    ID3D11Device3           *device;
-    ID3D11DeviceContext3    *context;
+	ID3D11DeviceContext     *base_context;
+	ID3D11Device3           *device;
+	ID3D11DeviceContext3    *context;
 	
-    IDXGIDevice3            *dxgi_device;
-    IDXGIAdapter            *dxgi_adapter;
-    IDXGIFactory3           *dxgi_factory;
+	IDXGIDevice3            *dxgi_device;
+	IDXGIAdapter            *dxgi_adapter;
+	IDXGIFactory3           *dxgi_factory;
 	////////////////////////////////
-    ID3D11RasterizerState1  *main_rasterizer;
-    ID3D11BlendState        *main_blend_state;
-    ID3D11BlendState        *no_blend_state;
-    ID3D11SamplerState      *point_sampler;
-    ID3D11SamplerState      *linear_sampler;
-    ID3D11DepthStencilState *noop_depth_stencil;
-    ID3D11DepthStencilState *plain_depth_stencil;
+	ID3D11RasterizerState1  *main_rasterizer;
+	ID3D11BlendState        *main_blend_state;
+	ID3D11BlendState        *no_blend_state;
+	ID3D11SamplerState      *point_sampler;
+	ID3D11SamplerState      *linear_sampler;
+	ID3D11DepthStencilState *noop_depth_stencil;
+	ID3D11DepthStencilState *plain_depth_stencil;
 	////////////////////////////////
 	//- nb: Shaders
-    ID3D11VertexShader      *vertex_shaders[1];
-    ID3D11InputLayout       *input_layouts[1];
-    ID3D11PixelShader       *pixel_shaders[1];
+	ID3D11VertexShader      *vertex_shaders[1];
+	ID3D11InputLayout       *input_layouts[1];
+	ID3D11PixelShader       *pixel_shaders[1];
 	ID3D11Buffer            *constant_buffers[1];
 	ID3D11Buffer            *vertex_buffer;
 	ID3D11Buffer            *index_buffer;
 	ID3D11Buffer            *instance_buffer;
 	////////////////////////////////
 	IWICImagingFactory       *wic_factory;
-	ID3D11ShaderResourceView *textures[4];
-	u32                       textures_count;
 	
 };
 
@@ -105,14 +103,23 @@ void r_handle_device_lost();
 
 void r_set_transform(f32 x, f32 y, f32 scale_x, f32 scale_y);
 
-R_Handle r_load_texture(const wchar_t *filename, Arena *arena);
 
-void r_submit_batch(const InstanceData *data, u32 data_len, u32 texture_id);
+void r_submit_batch(const InstanceData *data, u32 data_len, R_Handle texture);
 void r_clear(const float *color);
 void r_present();
 
+
+R_Handle r_tex2d_load_file(const wchar_t *filename, Arena *scratch_arena);
+void r_tex2d_release(R_Handle handle);
+
 internal void r_create_wic_factory();
-internal void r_create_wic_texture_from_file(const wchar_t *filename, ID3D11ShaderResourceView **texture_view, Arena *arena);
+internal R_Handle r_tex2d_alloc(DirectX::XMUINT2 size, void *data);
+internal R_Handle r_create_tex2d_from_file(const wchar_t *filename);
+
+////////////////////////////////
+//~ nb: Helper functions
+internal R_D3D11_Tex2D *r_d3d11_tex2d_from_handle(R_Handle handle);
+internal R_Handle r_d3d11_handle_from_tex2d(R_D3D11_Tex2D *texture);
 
 global R_D3D11_State *r_d3d11_state = {0};
 global R_D3D11_Tex2D r_d3d11_tex2d_nil = {&r_d3d11_tex2d_nil};
