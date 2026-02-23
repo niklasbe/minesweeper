@@ -124,7 +124,6 @@ game_init(Arena *arena)
 	
 	g_game->camera          = {0};
 	g_game->camera.zoom     = 1.0f;
-	g_game->camera.rotation = 1.0f;
 	
 	//- nb: Resources
 	g_game->spritesheet_handle  = r_load_texture(L"sheet.png", &g_game->scratch_arena);
@@ -292,7 +291,7 @@ game_reset()
 		int index = g_game->mine_indices[i];
 		Tile &tile = g_game->tiles[index];
 		tile.is_mine = true;
-		tile.sprite = sprites[TILE_MINE];
+		//tile.sprite = sprites[TILE_MINE];
 	}
 	
 	////////////////////////////////

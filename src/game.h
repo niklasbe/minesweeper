@@ -29,7 +29,6 @@ struct Camera
 {
 	f32 x, y;
 	f32 zoom;
-	f32 rotation;
 };
 
 // TODO(nb): make a system for this
