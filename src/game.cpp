@@ -112,18 +112,17 @@ game_init()
 	g_game->arena = arena;
 	g_game->scratch_arena = arena_alloc();
 	g_game->frame_arena = arena_alloc();
-	r_init();
-	
-	////////////////////////////////
-	game_reset();
-	
 	
 	g_game->camera          = {0};
 	g_game->camera.zoom     = 1.0f;
 	
+	game_reset();
+	
+	////////////////////////////////
 	//- nb: Resources
 	g_game->spritesheet_handle  = r_tex2d_load_file(L"sheet.png");
 	g_game->floodfill_queue = (u32*)arena_push(g_game->arena, g_game->tiles_count);
+	
 }
 
 void 
@@ -289,7 +288,7 @@ game_reset()
 		int index = g_game->mine_indices[i];
 		Tile *tile = &g_game->tiles[index];
 		tile->is_mine = true;
-		//tile.sprite = sprites[TILE_MINE];
+		//tile->sprite = sprites[TILE_MINE];
 	}
 	
 	////////////////////////////////
@@ -313,13 +312,6 @@ game_reveal_tile_by_idx(u32 idx)
 {
 	Tile &tile = g_game->tiles[idx];
 	
-	if(tile.is_swept)
-	{
-		// Nothing to chord
-		if(tile.neighbor_count == 0)
-			return false;
-	}
-	
 	// nb: Disallow a flagged tile from being swept
 	if(tile.has_flag)
 		return false;
@@ -329,6 +321,7 @@ game_reveal_tile_by_idx(u32 idx)
 		tile.sprite = sprites[TILE_MINERED];
 		return true;
 	};
+	
 	
 	if(!tile.is_swept)
 	{
@@ -348,6 +341,10 @@ game_reveal_tile_by_idx(u32 idx)
 	}
 	else
 	{
+		// Nothing to chord
+		if(tile.neighbor_count == 0)
+			return false;
+		
 		//- nb: Chording logic
 		u32 flag_count = 0;
 		u32 mine_count = 0;
