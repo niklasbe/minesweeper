@@ -69,7 +69,7 @@ game_get_neighbors(u32 tile_x, u32 tile_y, u32 neighbor_idx_list[8], u32 *neighb
 internal Tile *
 game_get_tile(u32 tile_x, u32 tile_y)
 {
-	ASSERT(tile_x < g_game->columns && tile_y < g_game->rows);
+	Assert(tile_x < g_game->columns && tile_y < g_game->rows);
 	u32 idx = tile_y * g_game->columns + tile_x;
 	return game_get_tile_by_idx(idx);
 }
@@ -77,7 +77,7 @@ game_get_tile(u32 tile_x, u32 tile_y)
 internal Tile *
 game_get_tile_by_idx(u32 idx)
 {
-	ASSERT(idx < g_game->tiles_count);
+	Assert(idx < g_game->tiles_count);
 	return &g_game->tiles[idx];
 }
 
@@ -287,8 +287,8 @@ game_reset()
 	for(int i = 0; i < g_game->mine_count; i++)
 	{
 		int index = g_game->mine_indices[i];
-		Tile &tile = g_game->tiles[index];
-		tile.is_mine = true;
+		Tile *tile = &g_game->tiles[index];
+		tile->is_mine = true;
 		//tile.sprite = sprites[TILE_MINE];
 	}
 	

@@ -6,7 +6,7 @@
 #pragma comment(lib, "ole32")
 
 #include <intrin.h>
-#define ASSERT(cond) do{ if(!(cond)) __debugbreak(); } while(0)
+#define Assert(cond) do{ if(!(cond)) __debugbreak(); } while(0)
 
 //#define _DEBUG
 
@@ -28,42 +28,46 @@ typedef double      f64;
 #define Kilobytes(x) x*1024
 #define Megabytes(x) x*1024*1024
 
+#define RESERVE_SIZE Megabytes(64)
+#define COMMIT_SIZE  Kilobytes(64)
+#define PAGE_SIZE    4096
+
+#define AlignPow2(pos, align) (((pos) + (align) - 1) & ~((align) - 1))
+#define Min(A,B) (((A)<(B))?(A):(B))
+#define Max(A,B) (((A)>(B))?(A):(B))
+#define ClampTop(A,X) Min(A,X)
+#define ClampBot(X,B) Max(X,B)
+#define Clamp(A,X,B) (((X)<(A))?(A):((X)>(B))?(B):(X))
+
 ////////////////////////////////
 //~ nb: Arena
 typedef struct Arena Arena;
 struct Arena 
 {
 	void *base_ptr;
-	u64  size;
-	u64  offset;
+	u64  reserved;
+	u64  committed;
+	u64  pos;
+	
+	u64 base_pos;
+	u64 reserve_size;
+	u64 commit_size;
 };
-typedef struct Temp Temp;
-struct Temp
-{
-	Arena *arena;
-	u64 pos;
-};
-
-Temp
-temp_begin(Arena *arena)
-{
-	u64 pos = arena->offset;
-	return {arena, pos};
-}
-void
-temp_end(Temp temp)
-{
-	temp.arena->offset = temp.pos;
-}
-
 Arena *arena_alloc()
 {
-	// TODO(nb): get new pages, only reserve
-	void *ptr = VirtualAlloc(0, Megabytes(64), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	void *ptr = VirtualAlloc(0, RESERVE_SIZE, MEM_RESERVE, PAGE_READWRITE);
+	VirtualAlloc(ptr, COMMIT_SIZE, MEM_COMMIT, PAGE_READWRITE);
+	
 	Arena *arena = (Arena*)ptr;
-	arena->base_ptr = ptr;
-	arena->size = Megabytes(64);
-	arena->offset = (sizeof(Arena) + 7) & ~7;
+	{
+		arena->pos          = AlignPow2(sizeof(Arena), 16);
+		arena->base_pos     = 0;
+		arena->reserved     = RESERVE_SIZE;
+		arena->reserve_size = RESERVE_SIZE;
+		arena->committed    = COMMIT_SIZE;
+		arena->commit_size  = COMMIT_SIZE;
+	}
+	
 	return arena;
 }
 void arena_release(Arena *arena)
@@ -72,15 +76,40 @@ void arena_release(Arena *arena)
 }
 void *arena_push(Arena *arena, u64 size)
 {
-	u64 aligned_size = (size + 7) & ~7;
-	ASSERT((arena->offset + aligned_size) <= arena->size);
-	void *result = (char*)arena->base_ptr + arena->offset;
-	arena->offset += aligned_size;
+	u64 pos_pre = AlignPow2(arena->pos, 16);
+	u64 pos_pst = pos_pre + size;
+	// TODO(nb): chain more arenas
+	if(pos_pst > arena->reserved)
+	{
+		__debugbreak();
+	}
+	// nb: commit new pages
+	if(arena->committed < pos_pst)
+	{
+		__debugbreak();
+		u64 cmt_pst_aligned = pos_pst + arena->commit_size - 1;
+    cmt_pst_aligned -= cmt_pst_aligned % arena->commit_size;
+    u64 cmt_pst_clamped = ClampTop(cmt_pst_aligned, arena->reserved);
+    u64 cmt_size = cmt_pst_clamped - arena->committed;
+    u8 *cmt_ptr = (u8 *)arena + arena->committed;
+		VirtualAlloc(cmt_ptr, cmt_size, MEM_COMMIT, PAGE_READWRITE);
+		arena->committed = cmt_pst_clamped;
+	}
+	// nb: return the start of the allocation, then update the cursor
+	void *result = (u8*)arena + pos_pre;
+	arena->pos = pos_pst;
 	return result;
+}
+void arena_pop_to(Arena *arena, u64 pos)
+{
+	u64 big_pos = ClampBot(AlignPow2(sizeof(Arena), 16), pos);
+	u64 new_pos = big_pos - arena->base_pos;
+	Assert(new_pos <= arena->pos);
+	arena->pos = new_pos;
 }
 void arena_clear(Arena *arena)
 {
-	arena->offset = (sizeof(Arena) + 7) & ~7;
+	arena_pop_to(arena, 0);
 }
 ////////////////////////////////
 

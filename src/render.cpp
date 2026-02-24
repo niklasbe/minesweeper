@@ -233,11 +233,11 @@ r_create_device_resources()
 	r_d3d11_state->dxgi_device->GetAdapter(&r_d3d11_state->dxgi_adapter);
 	r_d3d11_state->dxgi_adapter->GetParent(IID_IDXGIFactory2, (void**)(&r_d3d11_state->dxgi_factory));
 	
-	ASSERT(r_d3d11_state->device);
-	ASSERT(r_d3d11_state->context);
-	ASSERT(r_d3d11_state->dxgi_device);
-	ASSERT(r_d3d11_state->dxgi_adapter);
-	ASSERT(r_d3d11_state->dxgi_factory);
+	Assert(r_d3d11_state->device);
+	Assert(r_d3d11_state->context);
+	Assert(r_d3d11_state->dxgi_device);
+	Assert(r_d3d11_state->dxgi_adapter);
+	Assert(r_d3d11_state->dxgi_factory);
 	
 	// nb: create main rasterizer
 	{
@@ -494,7 +494,7 @@ void
 r_create_window_size_dependent_resources()
 {
 	OutputDebugString("CreateWindowSizeDependentResources\n");
-	ASSERT(r_d3d11_state->hwnd);
+	Assert(r_d3d11_state->hwnd);
 	
 	r_d3d11_state->context->OMSetRenderTargets(0, NULL, NULL);
 	SAFE_RELEASE(r_d3d11_state->framebuffer_rtv);
@@ -523,7 +523,7 @@ r_create_window_size_dependent_resources()
 			// Exit for now. HandleDeviceLost() will re-enter this function and properly set up the new device
 			return;
 		}
-		ASSERT(SUCCEEDED(hr));
+		Assert(SUCCEEDED(hr));
 	}
 	// nb: swapchain creation
 	// if no swapchain exists, create it
@@ -551,7 +551,7 @@ r_create_window_size_dependent_resources()
 																																		 0, // no fullscreen descriptor
 																																		 0, 
 																																		 &r_d3d11_state->swapchain);
-		ASSERT(SUCCEEDED(hr)); 
+		Assert(SUCCEEDED(hr)); 
 		
 		// This program does not support exclusive fullscreen, has no fullscreen descriptor. Prevent DXGI from responding to ALT+ENTER keybind
 		r_d3d11_state->dxgi_factory->MakeWindowAssociation(r_d3d11_state->hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -847,7 +847,8 @@ r_create_tex2d_from_file(const wchar_t *filename)
 	
 	UINT stride = width * 4; // 4 bytes per pixel (RGBA)
 	UINT buffer_size = stride * height;
-	Temp temp = temp_begin(r_d3d11_state->arena);
+	
+	u64 arena_pos = r_d3d11_state->arena->pos;
 	void *pixels = (void*)arena_push(r_d3d11_state->arena, buffer_size);
 	hr = converter->CopyPixels(nullptr, stride, buffer_size, (BYTE*)pixels);
 	
@@ -856,7 +857,9 @@ r_create_tex2d_from_file(const wchar_t *filename)
 	converter->Release();
 	frame->Release();
 	decoder->Release();
-	temp_end(temp);
+	
+	arena_pop_to(r_d3d11_state->arena, arena_pos);
+	
 	return handle;
 }
 
