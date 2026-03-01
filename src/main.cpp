@@ -114,6 +114,7 @@ void arena_clear(Arena *arena)
 ////////////////////////////////
 
 #include "render.cpp"
+//#include "font.cpp"
 #include "game.cpp"
 
 ////////////////////////////////
@@ -256,8 +257,11 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 															 NULL,
 															 hInstance,
 															 NULL);
-		
+		// nb: system inits
+		r_init();
 		game_init();
+		//font_init();
+		
 		game_set_window(hwnd, 1280, 720);
 		// NOTE(nb): ShowWindow() issues a WM_SIZE event, which will create size dependant resources for us 
 		ShowWindow(hwnd, nCmdShow);
@@ -273,10 +277,13 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 		}else
 		{
 			game_render();
+			WaitMessage();
 		}
 	}
 	
+	//font_destroy();
 	game_destroy();
+	r_destroy();
 	CoUninitialize();
 	return 0;
 }
