@@ -131,7 +131,10 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 	switch(message)
 	{
 		case WM_PAINT:
-		ValidateRect(hwnd, NULL);
+		//ValidateRect(hwnd, NULL);
+		PAINTSTRUCT ps;
+    BeginPaint(hwnd, &ps);
+    EndPaint(hwnd, &ps);
 		break;
 		
 		case WM_KEYDOWN:
