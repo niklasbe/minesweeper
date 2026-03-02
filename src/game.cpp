@@ -130,7 +130,6 @@ game_destroy()
 {
 	r_tex2d_release(g_game->spritesheet_handle);
 	
-	r_destroy();
 	arena_release(g_game->scratch_arena);
 	arena_release(g_game->frame_arena);
 }
@@ -457,5 +456,20 @@ game_render()
 	}
 	
 	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_handle);
+	
+	if(!g_game->is_playable)
+	{
+		draw_ascii_text("Game over!", 20, 528);
+		draw_ascii_text("Click anywhere to start over", 20, 580);
+	}
+	
+#if 0
+	// nb: render font atlas
+	InstanceData *data = (InstanceData*)arena_push(g_game->frame_arena, sizeof(InstanceData) * 1);
+	data[0] = {{100, 100}, {1024, 1024}, {0, 0, 1, 1} };
+	r_submit_batch(data, 1, font_dwrite_state->ascii_atlas);
+	draw_ascii_text("Minesweeper-the best game there is!", 0, 600);
+#endif
+	
 	r_present();
 }

@@ -478,7 +478,7 @@ r_create_device_resources()
 		{
 			D3D11_BUFFER_DESC desc = {0};
 			{
-				desc.ByteWidth      = sizeof(InstanceData) * 1024 * 64; // 65536 tiles?
+				desc.ByteWidth      = sizeof(InstanceData) * 30*16 * 100; // TODO(nb): update instance buffer at will?
 				desc.Usage          = D3D11_USAGE_DYNAMIC;
 				desc.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
 				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -573,10 +573,6 @@ r_create_window_size_dependent_resources()
 																																			 0.0f, 
 																																			 1.0f);
 	
-	/*r_d3d11_state->scale = DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f);
-	r_d3d11_state->translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f);
-	r_d3d11_state->world = r_d3d11_state->scale * r_d3d11_state->translation;
-	r_d3d11_state->final_transform = r_d3d11_state->world * r_d3d11_state->projection;*/
 	r_set_transform(0, 0, 1, 1);
 	////////////////////////////////
 	
@@ -597,6 +593,7 @@ r_create_window_size_dependent_resources()
 	r_d3d11_state->context->PSSetShader(r_d3d11_state->pixel_shaders[0], NULL, 0);
 	r_d3d11_state->context->PSSetSamplers(0, 1, &r_d3d11_state->point_sampler);
 	r_d3d11_state->context->OMSetRenderTargets(1, &r_d3d11_state->framebuffer_rtv, NULL);
+	r_d3d11_state->context->OMSetBlendState(r_d3d11_state->main_blend_state, NULL, 0xffffffff);
 	
 	
 } 

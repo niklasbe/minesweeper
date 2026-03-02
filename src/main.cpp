@@ -86,7 +86,7 @@ void *arena_push(Arena *arena, u64 size)
 	// nb: commit new pages
 	if(arena->committed < pos_pst)
 	{
-		__debugbreak();
+		//__debugbreak();
 		u64 cmt_pst_aligned = pos_pst + arena->commit_size - 1;
     cmt_pst_aligned -= cmt_pst_aligned % arena->commit_size;
     u64 cmt_pst_clamped = ClampTop(cmt_pst_aligned, arena->reserved);
@@ -111,10 +111,27 @@ void arena_clear(Arena *arena)
 {
 	arena_pop_to(arena, 0);
 }
+typedef struct Temp Temp;
+struct Temp
+{
+	Arena *arena;
+	u64 pos;
+};
+Temp temp_begin(Arena *arena)
+{
+	Temp temp = {0};
+	temp.arena = arena;
+	temp.pos = arena->pos;
+	return temp;
+}
+void temp_end(Temp temp)
+{
+	arena_pop_to(temp.arena, temp.pos);
+}
 ////////////////////////////////
 
 #include "render.cpp"
-//#include "font.cpp"
+#include "font.cpp"
 #include "game.cpp"
 
 ////////////////////////////////
@@ -253,9 +270,9 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 		HWND hwnd = CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP, // fix ugly resizing
 															 class_name,
 															 class_name,
-															 WS_OVERLAPPEDWINDOW, //^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
+															 WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
 															 CW_USEDEFAULT, CW_USEDEFAULT,
-															 1280, 720,
+															 976, 680,
 															 NULL,
 															 NULL,
 															 hInstance,
@@ -263,9 +280,9 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 		// nb: system inits
 		r_init();
 		game_init();
-		//font_init();
+		font_init();
 		
-		game_set_window(hwnd, 1280, 720);
+		game_set_window(hwnd, 976, 680);
 		// NOTE(nb): ShowWindow() issues a WM_SIZE event, which will create size dependant resources for us 
 		ShowWindow(hwnd, nCmdShow);
 	}
@@ -284,7 +301,7 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 		}
 	}
 	
-	//font_destroy();
+	font_destroy();
 	game_destroy();
 	r_destroy();
 	CoUninitialize();
