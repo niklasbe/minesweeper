@@ -270,7 +270,7 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 		HWND hwnd = CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP, // fix ugly resizing
 															 class_name,
 															 class_name,
-															 WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
+															 WS_OVERLAPPEDWINDOW, //^ WS_THICKFRAME ^ WS_MAXIMIZEBOX,
 															 CW_USEDEFAULT, CW_USEDEFAULT,
 															 976, 680,
 															 NULL,

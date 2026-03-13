@@ -24,6 +24,7 @@ typedef struct Font_DWrite_State Font_DWrite_State;
 struct Font_DWrite_State
 {
 	Arena                     *arena;
+  Arena                     *frame_arena;
 	IDWriteFactory            *factory;
 	IDWriteRenderingParams    *base_rendering_params;
 	IDWriteGdiInterop         *gdi_interop;
@@ -32,6 +33,7 @@ struct Font_DWrite_State
 	
 	IDWriteFontFace           *font_face;
 	R_Handle                  ascii_atlas;
+	R_Handle                  atlas;
 };
 
 typedef struct Font_DWrite_Font Font_DWrite_Font;
@@ -46,9 +48,11 @@ struct Font_Font
 void font_init();
 void font_destroy();
 void draw_ascii_text(const char *str, f32 x, f32 y);
+void font_frame();
 
-
+internal void font_bake_string_to_atlas(const char*);
 internal void font_bake_ascii_atlas();
+internal void font_bake_ascii_atlas_old();
 
 ////////////////////////////////
 //~ nb: Globals

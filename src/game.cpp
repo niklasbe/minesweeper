@@ -351,7 +351,10 @@ game_reveal_tile_by_idx(u32 idx)
 		u32 neighbor_idx_list_count = 0;
 		game_get_neighbors_by_idx(idx, neighbor_idx_list, &neighbor_idx_list_count);
 		
-		// TODO(nb): Fix bug where chording can occur even if the flags were incorrectly placed.
+		// TODO(nb): Fix bug where chording can occur even if the flags were incorrectly placed..
+		// This occurs because chording starts northwest, then north, then northeast, then west etc...
+		// So it's possible that two valid tiles will be swept even if there are multiple mines within
+		// the chord range.
 		for(int i = 0; i < neighbor_idx_list_count; i++)
 		{
 			if(g_game->tiles[neighbor_idx_list[i]].has_flag)
@@ -457,19 +460,28 @@ game_render()
 	
 	r_submit_batch(instance_data, g_game->tiles_count, g_game->spritesheet_handle);
 	
-	if(!g_game->is_playable)
+	
+  
+  if(!g_game->is_playable)
 	{
-		draw_ascii_text("Game over!", 20, 528);
-		draw_ascii_text("Click anywhere to start over", 20, 580);
+		draw_ascii_text("Game over!", 20, 500);
+		draw_ascii_text("Click anywhere to start over", 20, 558);
 	}
+  
+  InstanceData *data = (InstanceData*)arena_push(g_game->frame_arena, sizeof(InstanceData) * 1);
+	data[0] = {{20, 500}, {1024, 1024}, {0, 0, 1, 1} };
+	r_submit_batch(data, 1, font_dwrite_state->atlas);
+	
 	
 #if 0
 	// nb: render font atlas
-	InstanceData *data = (InstanceData*)arena_push(g_game->frame_arena, sizeof(InstanceData) * 1);
-	data[0] = {{100, 100}, {1024, 1024}, {0, 0, 1, 1} };
-	r_submit_batch(data, 1, font_dwrite_state->ascii_atlas);
-	draw_ascii_text("Minesweeper-the best game there is!", 0, 600);
+	InstanceData *data2 = (InstanceData*)arena_push(g_game->frame_arena, sizeof(InstanceData) * 1);
+	data2[0] = {{100, 100}, {1024, 1024}, {0, 0, 1, 1} };
+	r_submit_batch(data2, 1, font_dwrite_state->ascii_atlas);
+	draw_ascii_text("ef", 0, 0);
+	draw_ascii_text("This is a rendering test", 0, 500);
 #endif
 	
 	r_present();
+  font_frame();
 }
