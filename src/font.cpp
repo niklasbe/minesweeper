@@ -5,216 +5,6 @@
 #define FONT_SIZE 48 * 96.0f / 72.0f
 
 internal void
-font_bake_string_to_atlas(const char* text)
-{
-	u8 *atlas_buffer = (u8*)arena_push(font_dwrite_state->arena, FONT_ATLAS_SIZE * FONT_ATLAS_SIZE * 4);
-	
-	Temp temp = temp_begin(font_dwrite_state->frame_arena);
-	u32 count = strlen(text);
-	u32 *text_glyphs = (u32*)arena_push(temp.arena, sizeof(u32) * count);
-	for(int i = 0; i < count; i++)
-	{
-		text_glyphs[i] = text[i];
-	}
-	
-	u16 *glyph_idx = (u16*)arena_push(temp.arena, sizeof(u16) * count);
-	font_dwrite_state->font_face->GetGlyphIndices(text_glyphs, count, glyph_idx);
-	
-	DWRITE_GLYPH_METRICS *dwrite_metrics = (DWRITE_GLYPH_METRICS*)arena_push(temp.arena, sizeof(DWRITE_GLYPH_METRICS) * count);
-	font_dwrite_state->font_face->GetDesignGlyphMetrics(glyph_idx, count, dwrite_metrics);
-	
-	DWRITE_FONT_METRICS font_metrics = {0};
-	font_dwrite_state->font_face->GetMetrics(&font_metrics);
-	f32 scale = FONT_SIZE / (float)font_metrics.designUnitsPerEm;
-	
-	DWRITE_GLYPH_RUN glyph_run = {0};
-	{
-		glyph_run.fontFace = font_dwrite_state->font_face;
-		glyph_run.fontEmSize = FONT_SIZE;
-		glyph_run.glyphCount = count;
-		glyph_run.glyphIndices = glyph_idx;
-	}
-	f32 ascent  = (f32)font_metrics.ascent * scale;
-	f32 descent = (f32)font_metrics.descent * scale;
-	
-	// nb: move the baseline down so the top of the character hits the top of our bitmap
-	f32 draw_x = 0.0f;
-	f32 draw_y = ascent; 
-	
-	HDC dc = font_dwrite_state->bitmap_render_target->GetMemoryDC();
-	
-	HBRUSH black_brush = CreateSolidBrush(RGB(0, 0, 0));
-	RECT fill_rect = {0, 0, (LONG)font_dwrite_state->bitmap_render_target_dim.x, (LONG)font_dwrite_state->bitmap_render_target_dim.y};
-	FillRect(dc, &fill_rect, black_brush);
-	DeleteObject(black_brush);
-	
-	RECT rect = {0};
-	
-	font_dwrite_state->bitmap_render_target->DrawGlyphRun(
-																												draw_x,
-																												draw_y,
-																												DWRITE_MEASURING_MODE_NATURAL,
-																												&glyph_run,
-																												font_dwrite_state->base_rendering_params,
-																												0xFFFFFF, // White text
-																												&rect     // This RECT will be updated with the actual bounding box
-																												);
-	
-	//- nb: Extract pixels from render target
-	DIBSECTION dib = {0};
-	HBITMAP bitmap = (HBITMAP)GetCurrentObject(dc, OBJ_BITMAP);
-	GetObject(bitmap, sizeof(dib), &dib);
-	
-	u8 *src_pixels = (u8*)dib.dsBm.bmBits;
-	u32 src_pitch  = dib.dsBm.bmWidthBytes;
-	
-	for (u32 y = 0; y < font_dwrite_state->bitmap_render_target_dim.y; y++)
-	{
-		for (u32 x = 0; x < font_dwrite_state->bitmap_render_target_dim.x; x++)
-		{
-			u8 *src_pixel = src_pixels + (y * src_pitch) + (x * 4);
-			u8 intensity = src_pixel[0]; 
-			
-			u32 atlas_idx = (y * FONT_ATLAS_SIZE + x) * 4;
-			atlas_buffer[atlas_idx + 0] = 255;       // R
-			atlas_buffer[atlas_idx + 1] = 255;       // G
-			atlas_buffer[atlas_idx + 2] = 255;       // B
-			atlas_buffer[atlas_idx + 3] = intensity; // A 
-		}
-	}
-	////////////////////////////////
-	temp_end(temp);
-	R_Handle handle = r_tex2d_alloc({FONT_ATLAS_SIZE, FONT_ATLAS_SIZE}, atlas_buffer);
-	font_dwrite_state->atlas = handle;
-}
-
-// NOTE(nb):  CreateGlyphRunAnalysis does not allow for the flexibility I want.
-// There is no way to specify the rendering parameters, so unless you draw using
-// DWRITE_RENDERING_MODE_NATURAL and set the texture mode to DWRITE_TEXTURE_CLEARTYPE_3x1,
-// the produces text will appear way too aliased even on large faces.
-// The HDC-based font_bake_ascii_atlas() should be used instead.
-internal void
-font_bake_ascii_atlas_old()
-{
-	// TODO(nb): don't hardcode these
-	u8 *atlas_buffer = (u8*)arena_push(font_dwrite_state->arena, FONT_ATLAS_SIZE * FONT_ATLAS_SIZE * 4);
-	
-	const u8 text[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz 1234567890!-_/\\':;,.+-=*%";
-	const u32 count = sizeof(text) / sizeof(text[0]) - 1;
-	u32 text_glyphs[count];
-	for(int i = 0; i < count; i++)
-	{
-		text_glyphs[i] = text[i];
-	}
-	
-	u16 glyph_idx[count];
-	font_dwrite_state->font_face->GetGlyphIndices(text_glyphs, count, glyph_idx);
-	
-	DWRITE_GLYPH_METRICS dwrite_metrics[count];
-	font_dwrite_state->font_face->GetDesignGlyphMetrics(glyph_idx, count, dwrite_metrics);
-	
-	DWRITE_FONT_METRICS font_metrics;
-	font_dwrite_state->font_face->GetMetrics(&font_metrics);
-	f32 scale = FONT_SIZE / (float)font_metrics.designUnitsPerEm;
-	
-	////////////////////////////////
-	u32 cursor_x   = 0;
-	u32 cursor_y   = 0;
-	u32 row_h      = 0;
-	u32 padding    = 2;
-	// nb: we need the metrics for each glyph
-	for(u32 i = 0; i < count; i += 1)
-	{
-		DWRITE_GLYPH_RUN glyph_run = {0};
-		{
-			glyph_run.fontFace     = font_dwrite_state->font_face;
-			glyph_run.fontEmSize   = FONT_SIZE;
-			glyph_run.glyphCount   = 1;
-			glyph_run.glyphIndices = &glyph_idx[i];
-		}
-		IDWriteGlyphRunAnalysis *analysis;
-		font_dwrite_state->factory->CreateGlyphRunAnalysis(&glyph_run,
-																											 1.0f,
-																											 NULL,
-																											 DWRITE_RENDERING_MODE_ALIASED,
-																											 DWRITE_MEASURING_MODE_NATURAL,
-																											 0.0f,
-																											 0.0f,
-																											 &analysis);
-		// nb: store metrics
-		font_glyph_metrics[text[i]].left_bearing = (s32)(dwrite_metrics[i].leftSideBearing * scale);
-		font_glyph_metrics[text[i]].top_bearing  = (s32)(dwrite_metrics[i].topSideBearing * scale);
-		font_glyph_metrics[text[i]].advance      = (s32)(dwrite_metrics[i].advanceWidth * scale);
-		////////////////////////////////
-		
-		RECT rect;
-		analysis->GetAlphaTextureBounds(DWRITE_TEXTURE_ALIASED_1x1, &rect);
-		u32 glyph_w = rect.right - rect.left;
-		u32 glyph_h = rect.bottom - rect.top;
-		// nb: we might not need to draw it if it's too small
-		if(glyph_w > 0 && glyph_h > 0)
-		{
-			// nb: if we need to move to a new row
-			if(cursor_x + glyph_w + padding > FONT_ATLAS_SIZE)
-			{
-				cursor_x = 0;
-				cursor_y += row_h + padding;
-				row_h = 0;
-			}
-			
-			// nb: store more metrics
-			font_glyph_metrics[text[i]].u0 = (f32)cursor_x / FONT_ATLAS_SIZE;
-			font_glyph_metrics[text[i]].v0 = (f32)cursor_y / FONT_ATLAS_SIZE;
-			font_glyph_metrics[text[i]].u1 = (f32)(cursor_x + glyph_w) / FONT_ATLAS_SIZE;
-			font_glyph_metrics[text[i]].v1 = (f32)(cursor_y + glyph_h) / FONT_ATLAS_SIZE;
-			font_glyph_metrics[text[i]].width        = glyph_w;
-			font_glyph_metrics[text[i]].height       = glyph_h;
-			
-			
-			////////////////////////////////
-			// nb: create a temp buffer to store the texture, then blit it
-			Temp temp = temp_begin(font_dwrite_state->frame_arena);
-			u32 glyph_size = glyph_w * glyph_h;
-			u8 *temp_alpha = (u8*)arena_push(temp.arena, glyph_size);
-			analysis->CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1,
-																	 &rect,
-																	 temp_alpha,
-																	 glyph_size);
-			
-			// nb: bake the texture data
-			for (int y = 0; y < glyph_h; y++) 
-			{
-				for (int x = 0; x < glyph_w; x++) 
-				{
-					u32 atlas_idx = ((cursor_y + y) * FONT_ATLAS_SIZE + (cursor_x + x)) * 4;
-					u8 alpha = temp_alpha[y * glyph_w + x];
-					
-					atlas_buffer[atlas_idx + 0] = 255; // R
-					atlas_buffer[atlas_idx + 1] = 255; // G
-					atlas_buffer[atlas_idx + 2] = 255; // B
-					atlas_buffer[atlas_idx + 3] = alpha; // A
-				}
-			}
-			temp_end(temp);
-			////////////////////////////////
-			
-			// nb: update the tallest glyph in the current row
-			if(glyph_h > row_h)
-			{
-				row_h = glyph_h;
-			}
-			cursor_x += glyph_w + padding;
-		}
-		analysis->Release();
-	}
-	
-	R_Handle handle = r_tex2d_alloc({FONT_ATLAS_SIZE, FONT_ATLAS_SIZE}, atlas_buffer);
-	font_dwrite_state->ascii_atlas = handle;
-}
-
-f32 f_ascent;
-
-internal void
 font_bake_ascii_atlas()
 {
   const u8 text[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz 1234567890!-_/\\':;,.+-=*%";
@@ -240,8 +30,6 @@ font_bake_ascii_atlas()
   f32 scale = FONT_SIZE / (float)font_metrics.designUnitsPerEm;
   f32 ascent  = font_metrics.ascent * scale;
   f32 descent = font_metrics.descent * scale;
-  
-  f_ascent = ascent;
   
   HDC dc = font_dwrite_state->bitmap_render_target->GetMemoryDC();
   HBRUSH black_brush = CreateSolidBrush(RGB(0, 0, 0));
@@ -355,13 +143,10 @@ draw_ascii_text(const char *str, f32 start_x, f32 start_y)
 	for(int i = 0; str[i] != '\0'; i++)
 	{
 		Font_Glyph_Metrics *glyph = &font_glyph_metrics[str[i]];
-		
 		f32 x = cursor_x + (f32)glyph->left_bearing;
 		f32 y = start_y + (f32)glyph->top_bearing;
-    
     f32 uv_w = glyph->u1 - glyph->u0;
 		f32 uv_h = glyph->v1 - glyph->v0;
-		
 		instance_data[i] = 
 		{
 			{x, y},

@@ -50,9 +50,7 @@ void font_destroy();
 void draw_ascii_text(const char *str, f32 x, f32 y);
 void font_frame();
 
-internal void font_bake_string_to_atlas(const char*);
 internal void font_bake_ascii_atlas();
-internal void font_bake_ascii_atlas_old();
 
 ////////////////////////////////
 //~ nb: Globals
