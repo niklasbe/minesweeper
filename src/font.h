@@ -36,13 +36,6 @@ struct Font_DWrite_State
 	R_Handle                  atlas;
 };
 
-typedef struct Font_DWrite_Font Font_DWrite_Font;
-struct Font_Font
-{
-	IDWriteFontFile  *file;
-	IDWriteFontFace3 *face;
-};
-
 ////////////////////////////////
 //~ nb: Functions
 void font_init();

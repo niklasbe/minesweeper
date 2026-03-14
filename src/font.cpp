@@ -1,4 +1,6 @@
 
+// TODO(nb): need to cache this
+
 #include "font.h"
 
 #define FONT_ATLAS_SIZE 1024
