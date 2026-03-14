@@ -93,6 +93,6 @@ internal bool game_reveal_tile(u32 tile_x, u32 tile_y);
 internal bool game_reveal_tile_by_idx(u32 idx);
 
 global Tile game_tile_nil = {0};
-global Game *g_game = {0};;
+global Game *g_game = {0};
 
 #endif //GAME_H

@@ -2,14 +2,6 @@
 
 #include <time.h>
 
-// TODO(nb): Don't generate mines until the player clicks.
-// Fixes the following concerns:
-// 1. No need to remove any mines
-// 2. No need to add a new mine to take its place
-// 3. Can guarantee that the first click is a flood fill, more satisfying
-
-
-
 // TODO(nb): better system for this? spritesheet system?
 //- nb: Static uv offsets for every tile in the sheet
 static const DirectX::XMFLOAT2 sprites[] =
@@ -192,44 +184,79 @@ game_on_mouse_up(MouseButton button, u32 x, u32 y)
 	{
 		case LEFT_CLICK:
 		{
-			if(game_reveal_tile_by_idx(idx))
-			{
-				// nb: First sweep protection
-				if(g_game->swept_count == 0)
-				{
-					Tile *tile = game_get_tile_by_screen_pos(x, y);
-					// TODO(nb): add another mine from the already-generated list of mines
-					tile->is_mine = false;
-					g_game->first_sweep_protection_idx = idx;
-					// nb: Update neighbor count
-					u32 neighbor_count = 0;
-					u32 neighbor_idx_list[8];
-					u32 neighbor_idx_list_count;
-					game_get_neighbors_by_idx(idx, neighbor_idx_list, &neighbor_idx_list_count);
-					for(int i = 0; i < neighbor_idx_list_count; i++)
-					{
-						if(g_game->tiles[neighbor_idx_list[i]].is_mine)
-							neighbor_count += 1;
-						else
-							g_game->tiles[neighbor_idx_list[i]].neighbor_count -= 1;
-					}
-					tile->neighbor_count = neighbor_count;
-					game_reveal_tile_by_idx(idx);
-				}
-				else
-				{
-					game_gameover();
-				}
-			}
-		}
-		break;
-		
-		case RIGHT_CLICK:
-		{
-			
-		}
-		break;
-	}
+      // nb: first sweep protection
+      if(g_game->swept_count == 0)
+      {
+        u32 neighbor_idx_list[8];
+        u32 neighbor_idx_list_count;
+        game_get_neighbors_by_idx(idx, neighbor_idx_list, &neighbor_idx_list_count);
+        // nb: populate mine list, excluding the 3x3 grid around the first initial click
+        u32 tile_counter = 0;
+        for(int i = 0; i < g_game->tiles_count; i++)
+        {
+          bool hit = false;
+          for(int j = 0; j < neighbor_idx_list_count; j++)
+          {
+            // nb: is this in our 3x3 grid? if so, skip this tile as a mine candidate
+            if(i == neighbor_idx_list[j] || i == idx)
+            {
+              hit = true;
+              break;
+            }
+          }
+          if(!hit)
+          {
+            g_game->mine_indices[tile_counter++] = i;
+          }
+        }
+        // nb: shuffle index list
+        for(int i = g_game->tiles_count - 1; i > 0; i--)
+        {
+          int j = rand() % (i + 1);
+          int temp = g_game->mine_indices[i];
+          g_game->mine_indices[i] = g_game->mine_indices[j];
+          g_game->mine_indices[j] = temp;
+        }
+        // nb: Select n mines at random
+        for(int i = 0; i < g_game->mine_count; i++)
+        {
+          int index = g_game->mine_indices[i];
+          Tile *tile = &g_game->tiles[index];
+          tile->is_mine = true;
+          //tile->sprite = sprites[TILE_MINE];
+        }
+        
+        ////////////////////////////////
+        //- nb: Set the neighboring mine count for all tiles
+        for(int i = 0; i < g_game->mine_count; i++)
+        {
+          u32 neighbor_idx_list[8] = {0};
+          u32 neighbor_idx_list_count = 0;
+          game_get_neighbors_by_idx(g_game->mine_indices[i], neighbor_idx_list, &neighbor_idx_list_count);
+          for(int j = 0; j < neighbor_idx_list_count; j++)
+          {
+            if(!g_game->tiles[neighbor_idx_list[j]].is_mine)
+              g_game->tiles[neighbor_idx_list[j]].neighbor_count++;
+          }
+        }
+        game_reveal_tile_by_idx(idx);
+      }
+      else
+      {
+        if(game_reveal_tile_by_idx(idx))
+        {
+          game_gameover();
+        }
+      }
+    }
+    break;
+    
+    case RIGHT_CLICK:
+    {
+      
+    }
+    break;
+  }
 }
 
 void 
@@ -259,49 +286,13 @@ game_reset()
 	// nb: Index array for shuffling, used for mine selection
 	g_game->mine_indices = (u32*)arena_push(g_game->arena, (sizeof(u32) * g_game->tiles_count));
 	
-	// nb: Populate board
+	srand(time(NULL));
+  // nb: Populate board
 	for(int i = 0; i < g_game->tiles_count; i++)
 	{
 		Tile tile;
 		tile.sprite = sprites[TILE_DEFAULT];
 		g_game->tiles[i] = tile;
-		// nb: Populate index array
-		g_game->mine_indices[i] = i;
-	}
-	
-	////////////////////////////////
-	//- nb: Pick mines at random
-	srand(time(NULL));
-	// shuffle index list
-	for(int i = g_game->tiles_count - 1; i > 0; i--)
-	{
-		int j = rand() % (i + 1);
-		
-		int temp = g_game->mine_indices[i];
-		g_game->mine_indices[i] = g_game->mine_indices[j];
-		g_game->mine_indices[j] = temp;
-	}
-	// nb: Select n mines at random
-	for(int i = 0; i < g_game->mine_count; i++)
-	{
-		int index = g_game->mine_indices[i];
-		Tile *tile = &g_game->tiles[index];
-		tile->is_mine = true;
-		//tile->sprite = sprites[TILE_MINE];
-	}
-	
-	////////////////////////////////
-	//- nb: Set the neighboring mine count for all tiles
-	for(int i = 0; i < g_game->mine_count; i++)
-	{
-		u32 neighbor_idx_list[8] = {0};
-		u32 neighbor_idx_list_count = 0;
-		game_get_neighbors_by_idx(g_game->mine_indices[i], neighbor_idx_list, &neighbor_idx_list_count);
-		for(int j = 0; j < neighbor_idx_list_count; j++)
-		{
-			if(!g_game->tiles[neighbor_idx_list[j]].is_mine)
-				g_game->tiles[neighbor_idx_list[j]].neighbor_count++;
-		}
 	}
 }
 

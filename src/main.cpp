@@ -279,8 +279,8 @@ int WINAPI wWinMain(HINSTANCE hInstance,
 															 NULL);
 		// nb: system inits
 		r_init();
-		game_init();
 		font_init();
+		game_init();
 		
 		game_set_window(hwnd, 976, 680);
 		// NOTE(nb): ShowWindow() issues a WM_SIZE event, which will create size dependant resources for us 
