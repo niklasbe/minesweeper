@@ -8,26 +8,26 @@
 // to avoid accidental sweeps.
 enum MouseButton
 {
-	LEFT_CLICK,
-	RIGHT_CLICK
+  LEFT_CLICK,
+  RIGHT_CLICK
 };
 
 typedef struct Tile Tile;
 struct Tile
 {
-	u32               neighbor_count = 0;
-	bool              has_flag       = false;
-	bool              is_mine        = false;
-	bool              is_swept       = false;
-	
-	DirectX::XMFLOAT2 sprite; // uv offset
+  u32               neighbor_count = 0;
+  bool              has_flag       = false;
+  bool              is_mine        = false;
+  bool              is_swept       = false;
+  
+  DirectX::XMFLOAT2 sprite; // uv offset
 };
 
 typedef struct Camera Camera;
 struct Camera
 {
-	f32 x, y;
-	f32 zoom;
+  f32 x, y;
+  f32 zoom;
 };
 
 // TODO(nb): make a system for this
@@ -36,34 +36,34 @@ struct Camera
 typedef struct Game Game;
 struct Game
 {
-	
-	////////////////////////////////
-	// nb: Arenas
-	Arena         *arena;
-	Arena         *scratch_arena;
-	Arena         *frame_arena;
-	
-	
-	////////////////////////////////
-	R_Handle      spritesheet_handle;
-	u32           *floodfill_queue;
-	u32           floodfill_queue_count = 0;
-	u32           *mine_indices;
-	// nb: if first sweep protection happened, store the idx of the mine 
-	u32           first_sweep_protection_idx;
-	
-	////////////////////////////////
-	// nb: Variables
-	Camera        camera;
-	bool          is_playable;
-	f64           elapsed_time;
-	u32           mine_count;
-	u32           swept_count;
-	u32           flag_count;
-	u32           columns;
-	u32           rows;
-	Tile          *tiles;
-	u32           tiles_count;
+  
+  ////////////////////////////////
+  // nb: Arenas
+  Arena         *arena;
+  Arena         *scratch_arena;
+  Arena         *frame_arena;
+  
+  
+  ////////////////////////////////
+  R_Handle      spritesheet_handle;
+  u32           *floodfill_queue;
+  u32           floodfill_queue_count = 0;
+  u32           *mine_indices;
+  // nb: if first sweep protection happened, store the idx of the mine 
+  u32           first_sweep_protection_idx;
+  
+  ////////////////////////////////
+  // nb: Variables
+  Camera        camera;
+  bool          is_playable;
+  f64           elapsed_time;
+  u32           mine_count;
+  u32           swept_count;
+  u32           flag_count;
+  u32           columns;
+  u32           rows;
+  Tile          *tiles;
+  u32           tiles_count;
 };
 
 

@@ -10,7 +10,7 @@ internal void
 font_bake_ascii_atlas()
 {
   const u8 text[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz 1234567890!-_/\\':;,.+-=*%";
-	const u32 count = sizeof(text) / sizeof(text[0]) - 1;
+  const u32 count = sizeof(text) / sizeof(text[0]) - 1;
   
   u8 *atlas_buffer = (u8*)arena_push(font_dwrite_state->arena, FONT_ATLAS_SIZE * FONT_ATLAS_SIZE * 4);
   Temp temp = temp_begin(font_dwrite_state->frame_arena);
@@ -79,9 +79,9 @@ font_bake_ascii_atlas()
     }
     // nb: store metrics
     const f32 uv_size = 1.0f / FONT_ATLAS_SIZE;
-		font_glyph_metrics[text[i]].left_bearing = roundf(lsb - padding);
-		font_glyph_metrics[text[i]].top_bearing  = roundf(tsb - padding);
-		font_glyph_metrics[text[i]].advance      = advance;
+    font_glyph_metrics[text[i]].left_bearing = roundf(lsb - padding);
+    font_glyph_metrics[text[i]].top_bearing  = roundf(tsb - padding);
+    font_glyph_metrics[text[i]].advance      = advance;
     font_glyph_metrics[text[i]].width        = padded_w;
     font_glyph_metrics[text[i]].height       = padded_h;
     font_glyph_metrics[text[i]].u0           = (f32)shelf_x * uv_size;
@@ -130,7 +130,7 @@ font_bake_ascii_atlas()
   
   // Update the GPU texture with the new buffer contents
   R_Handle handle = r_tex2d_alloc({FONT_ATLAS_SIZE, FONT_ATLAS_SIZE}, atlas_buffer);
-	font_dwrite_state->ascii_atlas = handle;
+  font_dwrite_state->ascii_atlas = handle;
 }
 
 
@@ -138,27 +138,27 @@ font_bake_ascii_atlas()
 void
 draw_ascii_text(const char *str, f32 start_x, f32 start_y)
 {
-	u32 len = strlen(str);
+  u32 len = strlen(str);
   InstanceData *instance_data = (InstanceData*)arena_push(font_dwrite_state->frame_arena, sizeof(InstanceData) * len);
-	
-	f32 cursor_x = start_x;
-	for(int i = 0; str[i] != '\0'; i++)
-	{
-		Font_Glyph_Metrics *glyph = &font_glyph_metrics[str[i]];
-		f32 x = cursor_x + (f32)glyph->left_bearing;
-		f32 y = start_y + (f32)glyph->top_bearing;
+  
+  f32 cursor_x = start_x;
+  for(int i = 0; str[i] != '\0'; i++)
+  {
+    Font_Glyph_Metrics *glyph = &font_glyph_metrics[str[i]];
+    f32 x = cursor_x + (f32)glyph->left_bearing;
+    f32 y = start_y + (f32)glyph->top_bearing;
     f32 uv_w = glyph->u1 - glyph->u0;
-		f32 uv_h = glyph->v1 - glyph->v0;
-		instance_data[i] = 
-		{
-			{x, y},
-			{(f32)glyph->width, (f32)glyph->height}, 
-			{glyph->u0, glyph->v0, uv_w, uv_h}
-		};
-		
-		cursor_x += (f32)glyph->advance;
-	}
-	r_submit_batch(instance_data, len, font_dwrite_state->ascii_atlas);
+    f32 uv_h = glyph->v1 - glyph->v0;
+    instance_data[i] = 
+    {
+      {x, y},
+      {(f32)glyph->width, (f32)glyph->height}, 
+      {glyph->u0, glyph->v0, uv_w, uv_h}
+    };
+    
+    cursor_x += (f32)glyph->advance;
+  }
+  r_submit_batch(instance_data, len, font_dwrite_state->ascii_atlas);
 }
 
 void font_frame()
@@ -169,73 +169,73 @@ void font_frame()
 void 
 font_init()
 {
-	Arena *arena = arena_alloc();
-	font_dwrite_state = (Font_DWrite_State*)arena_push(arena, sizeof(Font_DWrite_State));
-	font_dwrite_state->arena = arena;
-	
+  Arena *arena = arena_alloc();
+  font_dwrite_state = (Font_DWrite_State*)arena_push(arena, sizeof(Font_DWrite_State));
+  font_dwrite_state->arena = arena;
+  
   Arena *frame_arena = arena_alloc();
   font_dwrite_state->frame_arena = frame_arena;
   
-	//- nb: Create factory
-	HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
-																	 __uuidof(IDWriteFactory3),
-																	 (IUnknown**)(&font_dwrite_state->factory));
-	if(FAILED(hr))
-		__debugbreak();
-	
-	font_dwrite_state->factory->CreateRenderingParams(&font_dwrite_state->base_rendering_params);
-	font_dwrite_state->factory->GetGdiInterop(&font_dwrite_state->gdi_interop);
-	font_dwrite_state->bitmap_render_target_dim = DirectX::XMINT2(2048, 256);
-	font_dwrite_state->gdi_interop->CreateBitmapRenderTarget(0, 
-																													 font_dwrite_state->bitmap_render_target_dim.x, 
-																													 font_dwrite_state->bitmap_render_target_dim.y, 
-																													 &font_dwrite_state->bitmap_render_target);
-	font_dwrite_state->bitmap_render_target->SetPixelsPerDip(1.0);
-	
-	
-	//- nb: Get font
-	IDWriteFontCollection* system_collection = NULL;
-	font_dwrite_state->factory->GetSystemFontCollection(&system_collection, FALSE);
-	uint32_t index = 0;
-	BOOL exists = FALSE;
-	system_collection->FindFamilyName(L"Segoe UI", &index, &exists);
-	
-	// nb: Font fallback
-	if(!exists) 
-	{
-		index = 0; 
-	}
-	
-	IDWriteFontFamily* family = NULL;
-	system_collection->GetFontFamily(index, &family);
-	IDWriteFont* font = NULL;
-	family->GetFirstMatchingFont(DWRITE_FONT_WEIGHT_NORMAL, 
-															 DWRITE_FONT_STRETCH_NORMAL, 
-															 DWRITE_FONT_STYLE_NORMAL, 
-															 &font);
-	//- nb: Create font face
-	IDWriteFontFace* font_face = NULL;
-	font->CreateFontFace(&font_face);
-	font_dwrite_state->font_face = font_face;
-	////////////////////////////////
-	
-	font->Release();
-	family->Release();
-	system_collection->Release();
-	
-	font_bake_ascii_atlas();
+  //- nb: Create factory
+  HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
+                                   __uuidof(IDWriteFactory3),
+                                   (IUnknown**)(&font_dwrite_state->factory));
+  if(FAILED(hr))
+    __debugbreak();
+  
+  font_dwrite_state->factory->CreateRenderingParams(&font_dwrite_state->base_rendering_params);
+  font_dwrite_state->factory->GetGdiInterop(&font_dwrite_state->gdi_interop);
+  font_dwrite_state->bitmap_render_target_dim = DirectX::XMINT2(2048, 256);
+  font_dwrite_state->gdi_interop->CreateBitmapRenderTarget(0, 
+                                                           font_dwrite_state->bitmap_render_target_dim.x, 
+                                                           font_dwrite_state->bitmap_render_target_dim.y, 
+                                                           &font_dwrite_state->bitmap_render_target);
+  font_dwrite_state->bitmap_render_target->SetPixelsPerDip(1.0);
+  
+  
+  //- nb: Get font
+  IDWriteFontCollection* system_collection = NULL;
+  font_dwrite_state->factory->GetSystemFontCollection(&system_collection, FALSE);
+  uint32_t index = 0;
+  BOOL exists = FALSE;
+  system_collection->FindFamilyName(L"Segoe UI", &index, &exists);
+  
+  // nb: Font fallback
+  if(!exists) 
+  {
+    index = 0; 
+  }
+  
+  IDWriteFontFamily* family = NULL;
+  system_collection->GetFontFamily(index, &family);
+  IDWriteFont* font = NULL;
+  family->GetFirstMatchingFont(DWRITE_FONT_WEIGHT_NORMAL, 
+                               DWRITE_FONT_STRETCH_NORMAL, 
+                               DWRITE_FONT_STYLE_NORMAL, 
+                               &font);
+  //- nb: Create font face
+  IDWriteFontFace* font_face = NULL;
+  font->CreateFontFace(&font_face);
+  font_dwrite_state->font_face = font_face;
+  ////////////////////////////////
+  
+  font->Release();
+  family->Release();
+  system_collection->Release();
+  
+  font_bake_ascii_atlas();
 }
 
 void
 font_destroy()
 {
-	font_dwrite_state->font_face->Release();
-	font_dwrite_state->factory->Release();
-	font_dwrite_state->base_rendering_params->Release();
-	font_dwrite_state->gdi_interop->Release();
-	font_dwrite_state->bitmap_render_target->Release();
-	r_tex2d_release(font_dwrite_state->ascii_atlas);
-	r_tex2d_release(font_dwrite_state->atlas);
-	arena_release(font_dwrite_state->frame_arena);
-	arena_release(font_dwrite_state->arena);
+  font_dwrite_state->font_face->Release();
+  font_dwrite_state->factory->Release();
+  font_dwrite_state->base_rendering_params->Release();
+  font_dwrite_state->gdi_interop->Release();
+  font_dwrite_state->bitmap_render_target->Release();
+  r_tex2d_release(font_dwrite_state->ascii_atlas);
+  r_tex2d_release(font_dwrite_state->atlas);
+  arena_release(font_dwrite_state->frame_arena);
+  arena_release(font_dwrite_state->arena);
 }

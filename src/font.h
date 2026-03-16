@@ -10,30 +10,30 @@
 typedef struct Font_Glyph_Metrics ont_Glyph_Metrics;
 struct Font_Glyph_Metrics
 {
-	f32 u0, v0, u1, v1; // uv
-	u32 width;
-	u32 height;
-	s32 left_bearing;
-	s32 top_bearing;
-	s32 offset_x;
-	s32 offset_y;
-	s32 advance;
+  f32 u0, v0, u1, v1; // uv
+  u32 width;
+  u32 height;
+  s32 left_bearing;
+  s32 top_bearing;
+  s32 offset_x;
+  s32 offset_y;
+  s32 advance;
 };
 
 typedef struct Font_DWrite_State Font_DWrite_State;
 struct Font_DWrite_State
 {
-	Arena                     *arena;
+  Arena                     *arena;
   Arena                     *frame_arena;
-	IDWriteFactory            *factory;
-	IDWriteRenderingParams    *base_rendering_params;
-	IDWriteGdiInterop         *gdi_interop;
-	DirectX::XMINT2           bitmap_render_target_dim;
-	IDWriteBitmapRenderTarget *bitmap_render_target;
-	
-	IDWriteFontFace           *font_face;
-	R_Handle                  ascii_atlas;
-	R_Handle                  atlas;
+  IDWriteFactory            *factory;
+  IDWriteRenderingParams    *base_rendering_params;
+  IDWriteGdiInterop         *gdi_interop;
+  DirectX::XMINT2           bitmap_render_target_dim;
+  IDWriteBitmapRenderTarget *bitmap_render_target;
+  
+  IDWriteFontFace           *font_face;
+  R_Handle                  ascii_atlas;
+  R_Handle                  atlas;
 };
 
 ////////////////////////////////

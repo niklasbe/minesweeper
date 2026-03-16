@@ -10,29 +10,29 @@
 typedef struct InstanceData InstanceData;
 struct InstanceData
 {
-	DirectX::XMFLOAT2 ipos;      // instance position in pixels
-	DirectX::XMFLOAT2 isize;     // size in pixels, scales the quad
-	DirectX::XMFLOAT4 iuv_rect;  // offset in normalized coordinates
+  DirectX::XMFLOAT2 ipos;      // instance position in pixels
+  DirectX::XMFLOAT2 isize;     // size in pixels, scales the quad
+  DirectX::XMFLOAT4 iuv_rect;  // offset in normalized coordinates
 };
 
 // TODO(nb): implement this
 typedef union R_Handle R_Handle;
 union R_Handle
 {
-	u64 U64[1];
-	u32 U32[2];
-	u16 U16[4];
+  u64 U64[1];
+  u32 U32[2];
+  u16 U16[4];
 };
 
 typedef struct R_D3D11_Tex2D R_D3D11_Tex2D;
 struct R_D3D11_Tex2D
 {
-	R_D3D11_Tex2D             *next;
-	u64                        generation;
-	
-	ID3D11Texture2D           *texture;
-	ID3D11ShaderResourceView  *view;
-	DirectX::XMUINT2           size;
+  R_D3D11_Tex2D             *next;
+  u64                        generation;
+  
+  ID3D11Texture2D           *texture;
+  ID3D11ShaderResourceView  *view;
+  DirectX::XMUINT2           size;
 };
 
 ////////////////////////////////
@@ -40,57 +40,57 @@ struct R_D3D11_Tex2D
 typedef struct R_D3D11_State R_D3D11_State;
 struct R_D3D11_State
 {
-	// TODO(nb): local scratch arena?
-	Arena                    *arena;
-	//-
-	// TODO(nb): reset on device lost
-	R_D3D11_Tex2D            *first_free_tex2d;
-	
-	////////////////////////////////
-	//- nb: Main Window
-	HWND                   hwnd;
-	IDXGISwapChain1         *swapchain;
-	ID3D11Texture2D         *framebuffer;
-	ID3D11RenderTargetView  *framebuffer_rtv;
-	u32                     width;
-	u32                     height;
-	D3D11_VIEWPORT          viewport;
-	////////////////////////////////
-	DirectX::XMMATRIX       projection;
-	DirectX::XMMATRIX       translation;
-	DirectX::XMMATRIX       scale;
-	DirectX::XMMATRIX       world;
-	DirectX::XMMATRIX       final_transform;
-	////////////////////////////////
-	//- nb: D3D11 context
-	ID3D11Device            *base_device;
-	ID3D11DeviceContext     *base_context;
-	ID3D11Device3           *device;
-	ID3D11DeviceContext3    *context;
-	
-	IDXGIDevice3            *dxgi_device;
-	IDXGIAdapter            *dxgi_adapter;
-	IDXGIFactory3           *dxgi_factory;
-	////////////////////////////////
-	ID3D11RasterizerState1  *main_rasterizer;
-	ID3D11BlendState        *main_blend_state;
-	ID3D11BlendState        *no_blend_state;
-	ID3D11SamplerState      *point_sampler;
-	ID3D11SamplerState      *linear_sampler;
-	ID3D11DepthStencilState *noop_depth_stencil;
-	ID3D11DepthStencilState *plain_depth_stencil;
-	////////////////////////////////
-	//- nb: Shaders
-	ID3D11VertexShader      *vertex_shaders[1];
-	ID3D11InputLayout       *input_layouts[1];
-	ID3D11PixelShader       *pixel_shaders[1];
-	ID3D11Buffer            *constant_buffers[1];
-	ID3D11Buffer            *vertex_buffer;
-	ID3D11Buffer            *index_buffer;
-	ID3D11Buffer            *instance_buffer;
-	////////////////////////////////
-	IWICImagingFactory       *wic_factory;
-	
+  // TODO(nb): local scratch arena?
+  Arena                    *arena;
+  //-
+  // TODO(nb): reset on device lost
+  R_D3D11_Tex2D            *first_free_tex2d;
+  
+  ////////////////////////////////
+  //- nb: Main Window
+  HWND                   hwnd;
+  IDXGISwapChain1         *swapchain;
+  ID3D11Texture2D         *framebuffer;
+  ID3D11RenderTargetView  *framebuffer_rtv;
+  u32                     width;
+  u32                     height;
+  D3D11_VIEWPORT          viewport;
+  ////////////////////////////////
+  DirectX::XMMATRIX       projection;
+  DirectX::XMMATRIX       translation;
+  DirectX::XMMATRIX       scale;
+  DirectX::XMMATRIX       world;
+  DirectX::XMMATRIX       final_transform;
+  ////////////////////////////////
+  //- nb: D3D11 context
+  ID3D11Device            *base_device;
+  ID3D11DeviceContext     *base_context;
+  ID3D11Device3           *device;
+  ID3D11DeviceContext3    *context;
+  
+  IDXGIDevice3            *dxgi_device;
+  IDXGIAdapter            *dxgi_adapter;
+  IDXGIFactory3           *dxgi_factory;
+  ////////////////////////////////
+  ID3D11RasterizerState1  *main_rasterizer;
+  ID3D11BlendState        *main_blend_state;
+  ID3D11BlendState        *no_blend_state;
+  ID3D11SamplerState      *point_sampler;
+  ID3D11SamplerState      *linear_sampler;
+  ID3D11DepthStencilState *noop_depth_stencil;
+  ID3D11DepthStencilState *plain_depth_stencil;
+  ////////////////////////////////
+  //- nb: Shaders
+  ID3D11VertexShader      *vertex_shaders[1];
+  ID3D11InputLayout       *input_layouts[1];
+  ID3D11PixelShader       *pixel_shaders[1];
+  ID3D11Buffer            *constant_buffers[1];
+  ID3D11Buffer            *vertex_buffer;
+  ID3D11Buffer            *index_buffer;
+  ID3D11Buffer            *instance_buffer;
+  ////////////////////////////////
+  IWICImagingFactory       *wic_factory;
+  
 };
 
 void r_init();
